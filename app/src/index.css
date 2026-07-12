@@ -46,6 +46,36 @@ button {
   flex-wrap: wrap;
 }
 
+.pattern-grid {
+  /* Drag-to-paint dispatches its own pointer events; don't let the browser
+     hijack the gesture for page scroll/zoom (touch/stylus parity). */
+  touch-action: none;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+
+.toolbar-option {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+}
+
+.toolbar-option.selected {
+  border-color: var(--accent);
+}
+
+.toolbar-eraser {
+  background: var(--bg);
+  font-size: 0.6rem;
+}
+
 .palette-editor {
   flex: 1 1 320px;
   min-width: 280px;
