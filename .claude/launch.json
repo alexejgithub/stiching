@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "crochet-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "app"],
+      "port": 5173
+    },
+    {
       "name": "crochet-prototype-editor",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", ".scratch/crochet-pattern-editor/prototype-editor"],
-      "port": 5173
+      "port": 5174
     }
   ]
 }

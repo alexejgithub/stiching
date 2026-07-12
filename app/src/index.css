@@ -1,0 +1,40 @@
+:root {
+  --text: #1c1c1f;
+  --bg: #ffffff;
+  --border: #d8d8dc;
+  --panel-bg: #f7f7f9;
+  --accent: #7b3bff;
+  color-scheme: light dark;
+  font: 16px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e7e7ea;
+    --bg: #16171d;
+    --border: #33343c;
+    --panel-bg: #1f2028;
+    --accent: #a67bff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
