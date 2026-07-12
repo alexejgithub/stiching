@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Alex/.claude/skills/**)",
+      "Bash(find . -iname \"package.json\" -not -path \"*/node_modules/*\")",
+      "Bash(find docs *)",
+      "Bash(npm --version)",
+      "Bash(npm create *)",
+      "Bash(npm install *)"
+    ]
+  }
+}
