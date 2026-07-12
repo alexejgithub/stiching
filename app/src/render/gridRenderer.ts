@@ -4,15 +4,25 @@
 // the two ever being able to visually drift apart.
 
 import { type Pattern, getSlot } from '../model/pattern';
+import { type Rect } from '../model/selection';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export interface GridRenderOptions {
   cellSize: number;
+  // ticket 23: an in-progress marquee-drag preview rect and/or the current
+  // floating selection's bounds, both in grid (row/col) coordinates. Purely
+  // additive — omitting them renders exactly as before.
+  marqueeRect?: Rect | null;
+  selectionRect?: Rect | null;
 }
 
 const BLANK_FILL = '#ffffff';
 const GRID_STROKE = '#c0c0c0';
+const MARQUEE_FILL = 'rgba(59, 130, 246, 0.15)';
+const MARQUEE_STROKE = '#3b82f6';
+const SELECTION_FILL = 'rgba(37, 99, 235, 0.25)';
+const SELECTION_STROKE = '#2563eb';
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
   return document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
@@ -52,7 +62,50 @@ export function buildGridSVG(pattern: Pattern, options: GridRenderOptions): SVGS
   svg.appendChild(buildColumnNumbers(pattern, cellSize, leftGutter, topGutter));
   svg.appendChild(buildRowNumbers(pattern, cellSize, leftGutter, topGutter));
 
+  if (options.marqueeRect) {
+    svg.appendChild(
+      buildOverlayRect(options.marqueeRect, cellSize, leftGutter, topGutter, 'marquee-overlay', MARQUEE_FILL, MARQUEE_STROKE, '4 2')
+    );
+  }
+  if (options.selectionRect) {
+    svg.appendChild(
+      buildOverlayRect(options.selectionRect, cellSize, leftGutter, topGutter, 'selection-overlay', SELECTION_FILL, SELECTION_STROKE)
+    );
+  }
+
   return svg;
+}
+
+// A semi-transparent rect over a rectangular region, for the in-progress
+// marquee preview and the floating selection. `pointer-events: none` so it
+// never intercepts the `elementFromPoint` cell hit-testing PatternGrid relies
+// on during drags.
+function buildOverlayRect(
+  rect: Rect,
+  cellSize: number,
+  leftGutter: number,
+  topGutter: number,
+  role: string,
+  fill: string,
+  stroke: string,
+  dash?: string
+): SVGGElement {
+  const group = el('g');
+  group.setAttribute('data-role', role);
+  group.setAttribute('pointer-events', 'none');
+
+  const rectEl = el('rect');
+  rectEl.setAttribute('x', String(rect.c0 * cellSize + leftGutter));
+  rectEl.setAttribute('y', String(rect.r0 * cellSize + topGutter));
+  rectEl.setAttribute('width', String((rect.c1 - rect.c0 + 1) * cellSize));
+  rectEl.setAttribute('height', String((rect.r1 - rect.r0 + 1) * cellSize));
+  rectEl.setAttribute('fill', fill);
+  rectEl.setAttribute('stroke', stroke);
+  rectEl.setAttribute('stroke-width', '2');
+  if (dash) rectEl.setAttribute('stroke-dasharray', dash);
+  group.appendChild(rectEl);
+
+  return group;
 }
 
 function buildCells(pattern: Pattern, cellSize: number, leftGutter: number, topGutter: number): SVGGElement {

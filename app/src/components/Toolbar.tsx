@@ -1,15 +1,22 @@
 import { useEditorStore } from '../store/editorStore';
 
-// Picks the active paint color (a palette Slot) or the eraser. Only
-// meaningful once a pattern is open — callers should gate on that.
+// Picks the active paint color (a palette Slot) or the eraser, and (ticket
+// 23) switches into the select tool and drives its rotate/mirror actions.
+// Only meaningful once a pattern is open — callers should gate on that.
 export function Toolbar() {
   const pattern = useEditorStore((s) => s.pattern);
+  const tool = useEditorStore((s) => s.tool);
+  const setTool = useEditorStore((s) => s.setTool);
   const activeSlotId = useEditorStore((s) => s.activeSlotId);
   const setActiveSlot = useEditorStore((s) => s.setActiveSlot);
   const canUndo = useEditorStore((s) => s.canUndo);
   const canRedo = useEditorStore((s) => s.canRedo);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
+  const selection = useEditorStore((s) => s.selection);
+  const selectAll = useEditorStore((s) => s.selectAll);
+  const rotateSelection = useEditorStore((s) => s.rotateSelection);
+  const mirrorSelection = useEditorStore((s) => s.mirrorSelection);
 
   if (!pattern) return null;
 
@@ -20,6 +27,39 @@ export function Toolbar() {
       </button>
       <button type="button" disabled={!canRedo} onClick={redo} aria-label="Redo">
         Redo
+      </button>
+      <button
+        type="button"
+        aria-pressed={tool === 'select'}
+        aria-label="Select tool"
+        onClick={() => setTool(tool === 'select' ? 'draw' : 'select')}
+      >
+        Select
+      </button>
+      <button type="button" disabled={tool !== 'select'} onClick={selectAll} aria-label="Select all">
+        Select All
+      </button>
+      <button
+        type="button"
+        disabled={!selection}
+        onClick={() => rotateSelection('cw')}
+        aria-label="Rotate selection clockwise"
+      >
+        Rotate CW
+      </button>
+      <button
+        type="button"
+        disabled={!selection}
+        onClick={() => rotateSelection('ccw')}
+        aria-label="Rotate selection counter-clockwise"
+      >
+        Rotate CCW
+      </button>
+      <button type="button" disabled={!selection} onClick={() => mirrorSelection('h')} aria-label="Flip selection horizontally">
+        Flip H
+      </button>
+      <button type="button" disabled={!selection} onClick={() => mirrorSelection('v')} aria-label="Flip selection vertically">
+        Flip V
       </button>
       <button
         type="button"

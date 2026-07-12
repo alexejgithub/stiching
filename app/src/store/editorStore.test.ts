@@ -463,6 +463,32 @@ describe('undo/redo', () => {
     expect(useEditorStore.getState().activeSlotId).toBe(activeSlotBefore);
   });
 
+  it('undo/redo never touch a floating selection (ticket 23, ticket 22 contract)', () => {
+    useEditorStore.getState().newPattern('T', 4, 4);
+    useEditorStore.getState().addSlot('#ff0000', 'Red');
+    const slotId = useEditorStore.getState().pattern!.palette[0].id;
+    useEditorStore.getState().setActiveSlot(slotId);
+    useEditorStore.getState().beginStroke(0, 0);
+    useEditorStore.getState().endStroke(); // one undoable paint at (0,0)
+
+    // Lift a selection elsewhere and leave it floating (uncommitted).
+    useEditorStore.getState().beginMarqueeDrag(2, 2);
+    useEditorStore.getState().continueMarqueeDrag(3, 3);
+    useEditorStore.getState().endMarqueeDrag();
+    const selectionBefore = useEditorStore.getState().selection;
+    expect(selectionBefore).not.toBeNull();
+
+    useEditorStore.getState().undo(); // reverts only the paint stroke
+
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBeNull();
+    expect(useEditorStore.getState().selection).toEqual(selectionBefore);
+
+    useEditorStore.getState().redo();
+
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(slotId);
+    expect(useEditorStore.getState().selection).toEqual(selectionBefore);
+  });
+
   it('caps history at ~100 steps, dropping the oldest entry rather than the newest', () => {
     useEditorStore.getState().addSlot('#ff0000', 'Red');
     const slotId = useEditorStore.getState().pattern!.palette[0].id;
@@ -486,5 +512,300 @@ describe('undo/redo', () => {
     // no longer reachable via undo — the Red slot survives even after
     // undoing every remaining step
     expect(useEditorStore.getState().pattern!.palette).toHaveLength(1);
+  });
+});
+
+function setGrid(cells: Array<[number, number, number]>) {
+  useEditorStore.setState((s) => {
+    const grid = s.pattern!.grid.map((row) => [...row]);
+    for (const [row, col, value] of cells) grid[row][col] = value;
+    return { pattern: { ...s.pattern!, grid } };
+  });
+}
+
+describe('marquee selection', () => {
+  it('drags out a rectangular marquee and lifts the region into a floating selection, blanking it in place', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([
+      [1, 1, 7],
+      [1, 2, 8],
+      [2, 1, 9],
+      [2, 2, 10],
+    ]);
+
+    useEditorStore.getState().beginMarqueeDrag(1, 1);
+    useEditorStore.getState().continueMarqueeDrag(2, 2);
+    useEditorStore.getState().endMarqueeDrag();
+
+    const { selection, pattern } = useEditorStore.getState();
+    expect(selection).not.toBeNull();
+    expect(selection!.block).toEqual([
+      [7, 8],
+      [9, 10],
+    ]);
+    expect(selection!.anchorRow).toBe(1);
+    expect(selection!.anchorCol).toBe(1);
+    expect(pattern!.grid[1][1]).toBeNull();
+    expect(pattern!.grid[2][2]).toBeNull();
+  });
+
+  it('select-all lifts the entire grid as the trivial whole-grid rect', () => {
+    useEditorStore.getState().newPattern('T', 3, 4);
+    setGrid([[0, 0, 1]]);
+
+    useEditorStore.getState().selectAll();
+
+    const { selection, pattern } = useEditorStore.getState();
+    expect(selection!.block.length).toBe(3);
+    expect(selection!.block[0].length).toBe(4);
+    expect(selection!.anchorRow).toBe(0);
+    expect(selection!.anchorCol).toBe(0);
+    expect(pattern!.grid.flat().every((c) => c === null)).toBe(true);
+  });
+
+  it('starting a new marquee drag replaces (stamps down) the current selection first', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([[0, 0, 3]]);
+
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().endMarqueeDrag();
+    useEditorStore.getState().nudgeSelection(1, 1); // move it so replacing has an observable effect
+
+    useEditorStore.getState().beginMarqueeDrag(3, 3);
+    useEditorStore.getState().endMarqueeDrag();
+
+    const { pattern, selection } = useEditorStore.getState();
+    expect(pattern!.grid[1][1]).toBe(3); // previous selection committed at its nudged position
+    expect(selection).not.toBeNull();
+    expect(selection!.anchorRow).toBe(3);
+    expect(selection!.anchorCol).toBe(3);
+  });
+});
+
+describe('rotateSelection / mirrorSelection', () => {
+  it('rotates CW and swaps dimensions for a non-square selection', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([
+      [0, 0, 1],
+      [0, 1, 2],
+      [0, 2, 3],
+    ]); // 1 row x 3 cols
+
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().continueMarqueeDrag(0, 2);
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().rotateSelection('cw');
+
+    expect(useEditorStore.getState().selection!.block).toEqual([[1], [2], [3]]); // 3 rows x 1 col
+  });
+
+  it('rotates CCW as the inverse of CW', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([
+      [0, 0, 1],
+      [0, 1, 2],
+      [0, 2, 3],
+    ]);
+
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().continueMarqueeDrag(0, 2);
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().rotateSelection('ccw');
+    expect(useEditorStore.getState().selection!.block).toEqual([[3], [2], [1]]);
+
+    useEditorStore.getState().rotateSelection('cw');
+    expect(useEditorStore.getState().selection!.block).toEqual([[1, 2, 3]]); // back to the original
+  });
+
+  it('flips horizontally and vertically without changing dimensions', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([
+      [0, 0, 1],
+      [0, 1, 2],
+      [1, 0, 3],
+      [1, 1, 4],
+    ]);
+
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().continueMarqueeDrag(1, 1);
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().mirrorSelection('h');
+    expect(useEditorStore.getState().selection!.block).toEqual([
+      [2, 1],
+      [4, 3],
+    ]);
+
+    useEditorStore.getState().mirrorSelection('v');
+    expect(useEditorStore.getState().selection!.block).toEqual([
+      [4, 3],
+      [2, 1],
+    ]);
+  });
+});
+
+describe('move (drag and nudge)', () => {
+  it('moves the floating selection via a drag, clamped in-bounds', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([[0, 0, 9]]);
+
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().beginSelectionMove(0, 0); // grab at the block's own top-left
+    useEditorStore.getState().continueSelectionMove(2, 2);
+    useEditorStore.getState().endSelectionMove();
+
+    const { selection } = useEditorStore.getState();
+    expect(selection!.anchorRow).toBe(2);
+    expect(selection!.anchorCol).toBe(2);
+  });
+
+  it('a move-drag keeps the pointer-to-anchor offset steady rather than re-centering the block', () => {
+    useEditorStore.getState().newPattern('T', 6, 6);
+    useEditorStore.getState().beginMarqueeDrag(1, 1);
+    useEditorStore.getState().continueMarqueeDrag(2, 2); // 2x2 block anchored at (1,1)
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().beginSelectionMove(2, 2); // grab the block's bottom-right cell, offset (1,1) from anchor
+    useEditorStore.getState().continueSelectionMove(4, 4);
+    useEditorStore.getState().endSelectionMove();
+
+    const { selection } = useEditorStore.getState();
+    expect(selection!.anchorRow).toBe(3); // 4 - offset(1) = 3, not jumped to 4
+    expect(selection!.anchorCol).toBe(3);
+  });
+
+  it('nudges the floating selection one step per call, clamped at the grid edges', () => {
+    useEditorStore.getState().newPattern('T', 4, 4);
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().continueMarqueeDrag(1, 1); // 2x2 block anchored at (0,0)
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().nudgeSelection(1, 1);
+    expect(useEditorStore.getState().selection).toMatchObject({ anchorRow: 1, anchorCol: 1 });
+
+    // max anchor for a 2x2 block in a 4x4 grid is (2,2) — clamp, don't overshoot
+    useEditorStore.getState().nudgeSelection(5, 5);
+    expect(useEditorStore.getState().selection).toMatchObject({ anchorRow: 2, anchorCol: 2 });
+
+    // clamp at 0 too, never negative
+    useEditorStore.getState().nudgeSelection(-10, -10);
+    expect(useEditorStore.getState().selection).toMatchObject({ anchorRow: 0, anchorCol: 0 });
+  });
+});
+
+describe('clamp-not-truncate (the prototype-validated 1x5-strip-near-edge case)', () => {
+  it('preserves all 5 cells when rotating a 1x5 strip flush against the grid edge', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([
+      [2, 0, 1],
+      [2, 1, 2],
+      [2, 2, 3],
+      [2, 3, 4],
+      [2, 4, 5],
+    ]); // full-width 1x5 strip in a 5-wide grid
+
+    useEditorStore.getState().beginMarqueeDrag(2, 0);
+    useEditorStore.getState().continueMarqueeDrag(2, 4);
+    useEditorStore.getState().endMarqueeDrag();
+
+    useEditorStore.getState().rotateSelection('cw'); // becomes 5 rows x 1 col — must clamp position, not drop cells
+
+    const { selection } = useEditorStore.getState();
+    expect(selection!.block).toEqual([[1], [2], [3], [4], [5]]);
+    expect(selection!.block.flat().filter((c) => c !== null)).toHaveLength(5); // nothing truncated
+    expect(selection!.anchorRow).toBe(0); // clamped into bounds
+    expect(selection!.anchorCol).toBe(0);
+  });
+
+  it('blocks a rotate outright (selection left untouched) when the rotated block cannot fit anywhere', () => {
+    useEditorStore.getState().newPattern('T', 3, 5); // only 3 rows tall — a rotated 5x1 strip can never fit
+    setGrid([
+      [1, 0, 1],
+      [1, 1, 2],
+      [1, 2, 3],
+      [1, 3, 4],
+      [1, 4, 5],
+    ]);
+
+    useEditorStore.getState().beginMarqueeDrag(1, 0);
+    useEditorStore.getState().continueMarqueeDrag(1, 4);
+    useEditorStore.getState().endMarqueeDrag();
+
+    const before = useEditorStore.getState().selection;
+    useEditorStore.getState().rotateSelection('cw');
+    const after = useEditorStore.getState().selection;
+
+    expect(after).toEqual(before); // blocked entirely, not truncated
+  });
+});
+
+describe('floating selection commit', () => {
+  function setupMovedSelection() {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    useEditorStore.getState().setTool('select');
+    setGrid([[0, 0, 4]]);
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().endMarqueeDrag();
+    useEditorStore.getState().nudgeSelection(2, 2); // move it so the commit has an observable effect
+  }
+
+  it('commitSelection (Escape) stamps the selection down as exactly one undo step', () => {
+    setupMovedSelection();
+    const stackBefore = useEditorStore.getState().undoStack.length;
+
+    useEditorStore.getState().commitSelection();
+
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore + 1);
+    expect(useEditorStore.getState().pattern!.grid[2][2]).toBe(4);
+    expect(useEditorStore.getState().selection).toBeNull();
+
+    useEditorStore.getState().undo(); // one call fully reverts the stamped selection
+    expect(useEditorStore.getState().pattern!.grid[2][2]).toBeNull();
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(4);
+  });
+
+  it('starting a new marquee drag commits the previous selection as exactly one undo step', () => {
+    setupMovedSelection();
+    const stackBefore = useEditorStore.getState().undoStack.length;
+
+    useEditorStore.getState().beginMarqueeDrag(4, 4);
+
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore + 1);
+    expect(useEditorStore.getState().pattern!.grid[2][2]).toBe(4);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().pattern!.grid[2][2]).toBeNull();
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(4);
+  });
+
+  it('switching tools commits the current selection as exactly one undo step', () => {
+    setupMovedSelection();
+    const stackBefore = useEditorStore.getState().undoStack.length;
+
+    useEditorStore.getState().setTool('draw');
+
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore + 1);
+    expect(useEditorStore.getState().pattern!.grid[2][2]).toBe(4);
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().pattern!.grid[2][2]).toBeNull();
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(4);
+  });
+
+  it('a no-op selection (lifted then committed with no transform/move) pushes no undo step', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([[0, 0, 4]]);
+    const stackBefore = useEditorStore.getState().undoStack.length;
+
+    useEditorStore.getState().beginMarqueeDrag(0, 0);
+    useEditorStore.getState().endMarqueeDrag();
+    useEditorStore.getState().commitSelection(); // stamped right back where it was lifted from
+
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore);
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(4);
   });
 });

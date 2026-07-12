@@ -3,10 +3,29 @@ import { type Cell, type Pattern, type Slot, type SlotId, createPattern } from '
 import * as palette from '../model/palette';
 import { type DeleteSlotResult } from '../model/palette';
 import { paintCell } from '../model/paint';
+import {
+  type Rect,
+  clampAnchor,
+  liftRect,
+  mirrorHorizontal,
+  mirrorVertical,
+  rectFromPoints,
+  rotateCCW,
+  rotateCW,
+  stampBlock,
+} from '../model/selection';
 
-// A single tool for now (ticket 21's scope); ticket 23 adds 'select' without
-// needing to rework this field.
-export type Tool = 'draw';
+export type Tool = 'draw' | 'select';
+
+// A rectangular block of cells lifted out of the grid and held in-session
+// (never persisted, never touched by undo/redo — see the `commitFloatingSelection`
+// helper below and ticket 22's undo/redo contract). `anchorRow`/`anchorCol` is
+// the block's current top-left position in the full grid.
+export interface FloatingSelection {
+  block: Cell[][];
+  anchorRow: number;
+  anchorCol: number;
+}
 
 interface CellDiff {
   row: number;
@@ -51,6 +70,14 @@ export interface EditorState {
   redoStack: Command[];
   canUndo: boolean;
   canRedo: boolean;
+  // Ephemeral session/UI state (never persisted, cleared on newPattern) for
+  // ticket 23's marquee-select-transform-move interaction. Undo/redo never
+  // reads or writes these — see the `undo`/`redo` actions below.
+  selection: FloatingSelection | null;
+  marqueeStart: { row: number; col: number } | null;
+  marqueeRect: Rect | null;
+  selectionOrigin: Pattern | null; // pattern snapshot from just before the active selection's lift, used to diff on commit
+  selectionGrab: { dr: number; dc: number } | null; // pointer-to-anchor offset captured at the start of a move-drag
   newPattern: (name: string, rows: number, cols: number) => void;
   setTool: (tool: Tool) => void;
   setActiveSlot: (slotId: SlotId | null) => void;
@@ -65,6 +92,17 @@ export interface EditorState {
   deleteSlot: (slotId: SlotId, options?: { clearCells?: boolean }) => DeleteSlotResult | undefined;
   undo: () => void;
   redo: () => void;
+  beginMarqueeDrag: (row: number, col: number) => void;
+  continueMarqueeDrag: (row: number, col: number) => void;
+  endMarqueeDrag: () => void;
+  selectAll: () => void;
+  beginSelectionMove: (row: number, col: number) => void;
+  continueSelectionMove: (row: number, col: number) => void;
+  endSelectionMove: () => void;
+  rotateSelection: (dir: 'cw' | 'ccw') => void;
+  mirrorSelection: (axis: 'h' | 'v') => void;
+  nudgeSelection: (dr: number, dc: number) => void;
+  commitSelection: () => void;
 }
 
 function historyFlags(undoStack: Command[], redoStack: Command[]) {
@@ -109,6 +147,33 @@ function diffGrids(before: Pattern, after: Pattern): CellDiff[] {
     }
   }
   return diffs;
+}
+
+// Stamps the current floating selection (if any) back into the grid and
+// records the whole lift-transform-stamp sequence as a single 'cells' Command
+// — the same undo log paint strokes use, diffed against the pattern as it
+// stood right before the selection was lifted. A no-op transform-then-stamp
+// (e.g. select then immediately commit with no move/rotate/mirror) yields no
+// diffs and pushes nothing, same as a no-op paint stroke. Always clears the
+// floating-selection fields, whether or not anything was pushed. Reusing the
+// existing 'cells' kind (rather than adding a new Command kind) is what keeps
+// undo/redo entirely unaware of selection state: they only ever apply
+// before/after cell values.
+function commitFloatingSelection(get: () => EditorState, set: (partial: Partial<EditorState>) => void) {
+  const { pattern, selection, selectionOrigin, undoStack } = get();
+  const clearFields = { selection: null, marqueeRect: null, marqueeStart: null, selectionOrigin: null, selectionGrab: null };
+  if (!pattern || !selection || !selectionOrigin) {
+    set(clearFields);
+    return;
+  }
+  const stamped = stampBlock(pattern, selection.block, selection.anchorRow, selection.anchorCol);
+  const diffs = diffGrids(selectionOrigin, stamped);
+  if (diffs.length === 0) {
+    set({ pattern: stamped, ...clearFields });
+    return;
+  }
+  const command: Command = { kind: 'cells', diffs };
+  set({ pattern: stamped, ...clearFields, ...historyFlags(pushToUndoStack(undoStack, command), []) });
 }
 
 // Records a palette command and commits the resulting pattern in one go.
@@ -162,14 +227,30 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   redoStack: [],
   canUndo: false,
   canRedo: false,
+  selection: null,
+  marqueeStart: null,
+  marqueeRect: null,
+  selectionOrigin: null,
+  selectionGrab: null,
   newPattern: (name, rows, cols) =>
     set({
       pattern: createPattern(name, rows, cols),
+      tool: 'draw',
       activeSlotId: null,
       stroke: null,
+      selection: null,
+      marqueeStart: null,
+      marqueeRect: null,
+      selectionOrigin: null,
+      selectionGrab: null,
       ...historyFlags([], []),
     }),
-  setTool: (tool) => set({ tool }),
+  // Switching tools commits whatever selection is currently floating (a
+  // no-op when nothing is floating) before changing `tool`.
+  setTool: (tool) => {
+    commitFloatingSelection(get, set);
+    set({ tool });
+  },
   setActiveSlot: (slotId) => set({ activeSlotId: slotId }),
   beginStroke: (row, col) => {
     const { pattern, activeSlotId } = get();
@@ -193,6 +274,94 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       set({ stroke: null });
     }
   },
+  // Starting a new marquee always replaces the current selection (no
+  // add/subtract modifiers): commit whatever was floating first.
+  beginMarqueeDrag: (row, col) => {
+    const { pattern } = get();
+    if (!pattern) return;
+    commitFloatingSelection(get, set);
+    set({ marqueeStart: { row, col }, marqueeRect: { r0: row, c0: col, r1: row, c1: col } });
+  },
+  continueMarqueeDrag: (row, col) => {
+    const { marqueeStart } = get();
+    if (!marqueeStart) return;
+    set({ marqueeRect: rectFromPoints(marqueeStart, { row, col }) });
+  },
+  endMarqueeDrag: () => {
+    const { pattern, marqueeRect } = get();
+    if (!pattern || !marqueeRect) return;
+    const { pattern: lifted, block } = liftRect(pattern, marqueeRect);
+    set({
+      pattern: lifted,
+      selection: { block, anchorRow: marqueeRect.r0, anchorCol: marqueeRect.c0 },
+      selectionOrigin: pattern,
+      marqueeRect: null,
+      marqueeStart: null,
+    });
+  },
+  // Select-all is the trivial whole-grid-rect case of the same marquee tool.
+  selectAll: () => {
+    const { pattern } = get();
+    if (!pattern) return;
+    commitFloatingSelection(get, set);
+    const base = get().pattern;
+    if (!base) return;
+    const rect: Rect = { r0: 0, c0: 0, r1: base.rows - 1, c1: base.cols - 1 };
+    const { pattern: lifted, block } = liftRect(base, rect);
+    set({
+      pattern: lifted,
+      selection: { block, anchorRow: rect.r0, anchorCol: rect.c0 },
+      selectionOrigin: base,
+      marqueeRect: null,
+      marqueeStart: null,
+    });
+  },
+  beginSelectionMove: (row, col) => {
+    const { selection } = get();
+    if (!selection) return;
+    set({ selectionGrab: { dr: row - selection.anchorRow, dc: col - selection.anchorCol } });
+  },
+  continueSelectionMove: (row, col) => {
+    const { selection, selectionGrab, pattern } = get();
+    if (!selection || !selectionGrab || !pattern) return;
+    const h = selection.block.length;
+    const w = selection.block[0]?.length ?? 0;
+    const clamped = clampAnchor(row - selectionGrab.dr, col - selectionGrab.dc, h, w, pattern.rows, pattern.cols);
+    if (!clamped) return;
+    set({ selection: { ...selection, anchorRow: clamped.row, anchorCol: clamped.col } });
+  },
+  endSelectionMove: () => set({ selectionGrab: null }),
+  rotateSelection: (dir) => {
+    const { selection, pattern } = get();
+    if (!selection || !pattern) return;
+    const rotated = dir === 'cw' ? rotateCW(selection.block) : rotateCCW(selection.block);
+    const h = rotated.length;
+    const w = rotated[0]?.length ?? 0;
+    // Anchor policy: keep the top-left corner fixed, clamping into bounds if
+    // the swapped dimensions would overhang. Block the rotate entirely
+    // (leave the selection untouched) if it can't fit anywhere in-bounds —
+    // content is never truncated.
+    const clamped = clampAnchor(selection.anchorRow, selection.anchorCol, h, w, pattern.rows, pattern.cols);
+    if (!clamped) return;
+    set({ selection: { block: rotated, anchorRow: clamped.row, anchorCol: clamped.col } });
+  },
+  mirrorSelection: (axis) => {
+    const { selection } = get();
+    if (!selection) return;
+    // Mirroring never changes dimensions, so it can never go out of bounds.
+    const mirrored = axis === 'h' ? mirrorHorizontal(selection.block) : mirrorVertical(selection.block);
+    set({ selection: { ...selection, block: mirrored } });
+  },
+  nudgeSelection: (dr, dc) => {
+    const { selection, pattern } = get();
+    if (!selection || !pattern) return;
+    const h = selection.block.length;
+    const w = selection.block[0]?.length ?? 0;
+    const clamped = clampAnchor(selection.anchorRow + dr, selection.anchorCol + dc, h, w, pattern.rows, pattern.cols);
+    if (!clamped) return;
+    set({ selection: { ...selection, anchorRow: clamped.row, anchorCol: clamped.col } });
+  },
+  commitSelection: () => commitFloatingSelection(get, set),
   addSlot: (hex, label) => {
     const pattern = get().pattern;
     if (!pattern) return;
