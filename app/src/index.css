@@ -38,3 +38,87 @@ button {
   font: inherit;
   cursor: pointer;
 }
+
+.editor-body {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.palette-editor {
+  flex: 1 1 320px;
+  min-width: 280px;
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.palette-row {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: var(--panel-bg);
+}
+
+.palette-row-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.palette-row-fields input[type='text'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.palette-symbol {
+  font-size: 1.2rem;
+  width: 1.5em;
+  text-align: center;
+}
+
+.reorder-buttons {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.symbol-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+}
+
+.symbol-option {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 4px;
+  width: 1.8em;
+  height: 1.8em;
+  padding: 0;
+}
+
+.symbol-option.selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.palette-delete-blocked {
+  margin: 0.4rem 0 0;
+  color: var(--text);
+}
+
+.palette-add-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}

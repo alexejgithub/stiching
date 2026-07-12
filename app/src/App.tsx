@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NewPatternDialog } from './components/NewPatternDialog';
+import { PaletteEditor } from './components/PaletteEditor';
 import { PatternGrid } from './components/PatternGrid';
 import { useEditorStore } from './store/editorStore';
 
@@ -31,7 +32,10 @@ export default function App() {
       <header className="editor-header">
         <h1>{pattern.name}</h1>
       </header>
-      <PatternGrid pattern={pattern} />
+      <div className="editor-body">
+        <PatternGrid pattern={pattern} />
+        <PaletteEditor />
+      </div>
     </div>
   );
 }
