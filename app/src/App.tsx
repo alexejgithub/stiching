@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ExportDialog } from './components/ExportDialog';
 import { NewPatternDialog } from './components/NewPatternDialog';
 import { PaletteEditor } from './components/PaletteEditor';
 import { PatternGrid } from './components/PatternGrid';
@@ -21,6 +22,7 @@ export default function App() {
   const newPattern = useEditorStore((s) => s.newPattern);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [resizeDialogOpen, setResizeDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [importError, setImportError] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +139,9 @@ export default function App() {
         <button type="button" onClick={() => importInputRef.current?.click()}>
           Import
         </button>
+        <button type="button" onClick={() => setExportDialogOpen(true)}>
+          Export / Print (SVG)
+        </button>
         <input
           ref={importInputRef}
           type="file"
@@ -156,6 +161,7 @@ export default function App() {
         <PaletteEditor />
       </div>
       {resizeDialogOpen && <ResizeDialog onClose={() => setResizeDialogOpen(false)} />}
+      {exportDialogOpen && <ExportDialog pattern={pattern} onClose={() => setExportDialogOpen(false)} />}
     </div>
   );
 }

@@ -15,6 +15,14 @@ export interface GridRenderOptions {
   // additive — omitting them renders exactly as before.
   marqueeRect?: Rect | null;
   selectionRect?: Rect | null;
+  // ticket 27: the absolute row/col that local row/col 0 of `pattern` maps
+  // to. Lets the export pipeline pass in a windowed sub-pattern (one page's
+  // row/col slice) while still drawing column/row number labels — and their
+  // left/right parity — reflecting true position in the full Pattern, rather
+  // than renumbering from 1 per page. Default 0 reproduces prior behavior
+  // exactly, so the live editor (which never windows) is unaffected.
+  rowOffset?: number;
+  colOffset?: number;
 }
 
 const BLANK_FILL = '#ffffff';
@@ -44,7 +52,7 @@ export function rowSide(rowIndex: number): 'left' | 'right' {
  * (px on screen; physical print units are the caller's concern in ticket 27).
  */
 export function buildGridSVG(pattern: Pattern, options: GridRenderOptions): SVGSVGElement {
-  const { cellSize } = options;
+  const { cellSize, rowOffset = 0, colOffset = 0 } = options;
   const leftGutter = cellSize;
   const rightGutter = cellSize;
   const topGutter = cellSize;
@@ -59,8 +67,8 @@ export function buildGridSVG(pattern: Pattern, options: GridRenderOptions): SVGS
   svg.setAttribute('data-role', 'pattern-grid');
 
   svg.appendChild(buildCells(pattern, cellSize, leftGutter, topGutter));
-  svg.appendChild(buildColumnNumbers(pattern, cellSize, leftGutter, topGutter));
-  svg.appendChild(buildRowNumbers(pattern, cellSize, leftGutter, topGutter));
+  svg.appendChild(buildColumnNumbers(pattern, cellSize, leftGutter, topGutter, colOffset));
+  svg.appendChild(buildRowNumbers(pattern, cellSize, leftGutter, topGutter, rowOffset));
 
   if (options.marqueeRect) {
     svg.appendChild(
@@ -137,7 +145,8 @@ function buildColumnNumbers(
   pattern: Pattern,
   cellSize: number,
   leftGutter: number,
-  topGutter: number
+  topGutter: number,
+  colOffset: number
 ): SVGGElement {
   const group = el('g');
   group.setAttribute('data-role', 'column-numbers');
@@ -150,19 +159,26 @@ function buildColumnNumbers(
     text.setAttribute('font-size', String(cellSize * 0.5));
     text.setAttribute('data-role', 'column-number');
     text.setAttribute('data-col', String(col));
-    text.textContent = String(displayNumber(col));
+    text.textContent = String(displayNumber(col + colOffset));
     group.appendChild(text);
   }
 
   return group;
 }
 
-function buildRowNumbers(pattern: Pattern, cellSize: number, leftGutter: number, topGutter: number): SVGGElement {
+function buildRowNumbers(
+  pattern: Pattern,
+  cellSize: number,
+  leftGutter: number,
+  topGutter: number,
+  rowOffset: number
+): SVGGElement {
   const group = el('g');
   group.setAttribute('data-role', 'row-numbers');
 
   for (let row = 0; row < pattern.rows; row++) {
-    const side = rowSide(row);
+    const absRow = row + rowOffset;
+    const side = rowSide(absRow);
     const text = el('text');
     const y = row * cellSize + topGutter + cellSize / 2 + cellSize * 0.18;
     if (side === 'right') {
@@ -177,7 +193,7 @@ function buildRowNumbers(pattern: Pattern, cellSize: number, leftGutter: number,
     text.setAttribute('data-role', 'row-number');
     text.setAttribute('data-row', String(row));
     text.setAttribute('data-side', side);
-    text.textContent = String(displayNumber(row));
+    text.textContent = String(displayNumber(absRow));
     group.appendChild(text);
   }
 

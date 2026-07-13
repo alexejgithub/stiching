@@ -152,3 +152,58 @@ button {
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+.export-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.export-preset.selected {
+  border-color: var(--accent);
+}
+
+.export-preview {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  margin: 0.5rem 0;
+}
+
+.export-page-sheet {
+  margin-bottom: 1rem;
+}
+
+.export-page-sheet svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Print the same generated page SVGs the Download button writes to disk —
+   no separate print-only rendering path. Hides everything else in the
+   document and lets every page's sheet through (not just the first, which
+   is all the on-screen preview shows without scrolling), with a page break
+   between sheets. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .export-preview,
+  .export-preview * {
+    visibility: visible;
+  }
+  .export-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-height: none;
+    overflow: visible;
+    border: none;
+    margin: 0;
+  }
+  .export-page-sheet {
+    page-break-after: always;
+  }
+}
