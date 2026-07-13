@@ -5,7 +5,7 @@
 
 import { type Pattern } from '../model/pattern';
 import { SYMBOLS } from '../model/symbols';
-import { buildGridSVG, displayNumber } from './gridRenderer';
+import { NUMBER_TEXT_FILL, buildGridSVG, displayNumber } from './gridRenderer';
 import {
   A4_PORTRAIT_MM,
   DEFAULT_CELL_SIZE_MM,
@@ -56,6 +56,7 @@ function buildHeader(range: PageRange, pageIndex: number, pageCount: number, cel
   title.setAttribute('x', String(cellSize * 0.3));
   title.setAttribute('y', String(cellSize * 0.9));
   title.setAttribute('font-size', String(cellSize * 0.8));
+  title.setAttribute('fill', NUMBER_TEXT_FILL);
   title.setAttribute('data-role', 'page-header-title');
   title.textContent = `Page ${pageIndex + 1} of ${pageCount}`;
   group.appendChild(title);
@@ -69,6 +70,7 @@ function buildHeader(range: PageRange, pageIndex: number, pageCount: number, cel
   rangeText.setAttribute('x', String(cellSize * 0.3));
   rangeText.setAttribute('y', String(cellSize * 1.7));
   rangeText.setAttribute('font-size', String(cellSize * 0.5));
+  rangeText.setAttribute('fill', NUMBER_TEXT_FILL);
   rangeText.setAttribute('data-role', 'page-header-range');
   rangeText.setAttribute('data-row-start', String(rowStartAbs));
   rangeText.setAttribute('data-row-end', String(rowEndAbs));
@@ -164,6 +166,7 @@ function buildLegend(pattern: Pattern, cellSize: number, width: number, y: numbe
     symbol.setAttribute('y', String(itemY + cellSize * 0.58));
     symbol.setAttribute('text-anchor', 'middle');
     symbol.setAttribute('font-size', String(cellSize * 0.45));
+    symbol.setAttribute('fill', NUMBER_TEXT_FILL);
     symbol.setAttribute('data-role', 'legend-symbol');
     symbol.textContent = SYMBOLS[slot.symbolId] ?? '';
     item.appendChild(symbol);
@@ -172,6 +175,7 @@ function buildLegend(pattern: Pattern, cellSize: number, width: number, y: numbe
     label.setAttribute('x', String(itemX + cellSize * 1.0));
     label.setAttribute('y', String(itemY + cellSize * 0.58));
     label.setAttribute('font-size', String(cellSize * 0.45));
+    label.setAttribute('fill', NUMBER_TEXT_FILL);
     label.setAttribute('data-role', 'legend-label');
     label.textContent = slot.label;
     item.appendChild(label);

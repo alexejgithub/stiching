@@ -103,6 +103,29 @@ describe('buildExportPageSVG', () => {
     expect(svg.querySelector('[data-role="thumbnail-bounds"]')).not.toBeNull();
     expect(svg.querySelector('[data-role="thumbnail-highlight"]')).not.toBeNull();
   });
+
+  // Ticket 29: exported SVGs are standalone documents opened outside the
+  // app's CSS, so page-chrome text (header title/range, legend symbol/label)
+  // needs a fill baked directly into the SVG rather than relying on any
+  // inherited or CSS-applied color.
+  it('gives page-header and legend text elements an explicit fill attribute', () => {
+    const pattern = patternWithPalette(10, 10);
+    const range = { rowStart: 0, rowEnd: 9, colStart: 0, colEnd: 9 };
+
+    const svg = buildExportPageSVG(pattern, range, { cellSize: 10, pageIndex: 0, pageCount: 1 });
+
+    const textRoles = ['page-header-title', 'page-header-range', 'legend-symbol', 'legend-label'];
+    textRoles.forEach((role) => {
+      const nodes = svg.querySelectorAll(`[data-role="${role}"]`);
+      expect(nodes.length).toBeGreaterThan(0);
+      nodes.forEach((node) => {
+        const fill = node.getAttribute('fill');
+        expect(fill).toBeTruthy();
+        expect(fill).not.toBe('black');
+        expect(fill).not.toBe('#000000');
+      });
+    });
+  });
 });
 
 describe('buildExportPages: single-vs-multi-file behavior', () => {

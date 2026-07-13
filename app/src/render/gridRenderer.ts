@@ -31,6 +31,18 @@ const MARQUEE_FILL = 'rgba(59, 130, 246, 0.15)';
 const MARQUEE_STROKE = '#3b82f6';
 const SELECTION_FILL = 'rgba(37, 99, 235, 0.25)';
 const SELECTION_STROKE = '#2563eb';
+// Ticket 29: number-gutter <text> elements previously had no fill at all, so
+// they fell back to the SVG default (opaque black) unconditionally. That's
+// invisible against the transparent, often dark-themed gutters in the live
+// editor, and export/print SVGs are standalone documents opened outside the
+// app's CSS, so the fallback needs to be a real, baked-in value rather than
+// an inherited default. This baseline matches index.css's light-mode
+// `--text`, which is a safe assumption for print/standalone viewing; the
+// live editor additionally overrides it per-theme via a CSS rule scoped to
+// `[data-role="column-number"]`/`[data-role="row-number"]` (see index.css),
+// since CSS rules win over presentation attributes like this one regardless
+// of specificity.
+export const NUMBER_TEXT_FILL = '#1c1c1f';
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
   return document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
@@ -157,6 +169,7 @@ function buildColumnNumbers(
     text.setAttribute('y', String(topGutter * 0.65));
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('font-size', String(cellSize * 0.5));
+    text.setAttribute('fill', NUMBER_TEXT_FILL);
     text.setAttribute('data-role', 'column-number');
     text.setAttribute('data-col', String(col));
     text.textContent = String(displayNumber(col + colOffset));
@@ -190,6 +203,7 @@ function buildRowNumbers(
     }
     text.setAttribute('y', String(y));
     text.setAttribute('font-size', String(cellSize * 0.5));
+    text.setAttribute('fill', NUMBER_TEXT_FILL);
     text.setAttribute('data-role', 'row-number');
     text.setAttribute('data-row', String(row));
     text.setAttribute('data-side', side);

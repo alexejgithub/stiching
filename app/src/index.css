@@ -52,6 +52,28 @@ button {
   touch-action: none;
 }
 
+/* Ticket 29: gridRenderer.ts/exportRenderer.ts bake a fixed dark `fill`
+   presentation attribute onto number/chrome <text> elements so a downloaded
+   or printed SVG is legible standalone (no app CSS, assumed white page).
+   When those same elements are mounted live in this document (the editor
+   grid, and the Export dialog's on-screen preview), override that fixed
+   color with the theme-aware `--text` var instead — CSS rules always win
+   over presentation attributes regardless of specificity, so this is enough
+   to re-color them without touching the renderer. Scoped to `@media screen`
+   only: `window.print()` reuses this same live DOM (see the `@media print`
+   block below), and printed output should keep the baked dark-on-white
+   assumption rather than following the *screen's* OS theme. */
+@media screen {
+  [data-role='column-number'],
+  [data-role='row-number'],
+  [data-role='page-header-title'],
+  [data-role='page-header-range'],
+  [data-role='legend-symbol'],
+  [data-role='legend-label'] {
+    fill: var(--text);
+  }
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
