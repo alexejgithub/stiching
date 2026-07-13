@@ -5,6 +5,7 @@
 
 import { type Pattern, getSlot } from '../model/pattern';
 import { type Rect } from '../model/selection';
+import { SYMBOLS } from '../model/symbols';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -31,6 +32,46 @@ const MARQUEE_FILL = 'rgba(59, 130, 246, 0.15)';
 const MARQUEE_STROKE = '#3b82f6';
 const SELECTION_FILL = 'rgba(37, 99, 235, 0.25)';
 const SELECTION_STROKE = '#2563eb';
+const GLYPH_DARK = '#1a1a1a';
+const GLYPH_LIGHT = '#ffffff';
+// SVG <text> baselines sit at the text's bottom, not its vertical center, so
+// every vertically-centered label nudges its y down by this fraction of
+// cellSize to visually center it (empirically tuned, shared so the nudge
+// can't drift between labels).
+const TEXT_BASELINE_NUDGE_FACTOR = 0.18;
+
+/**
+ * Picks a legible glyph color (near-black or near-white) for text drawn on
+ * top of `hex`, using the WCAG relative-luminance formula so the choice
+ * reflects actual contrast rather than a fixed color per cell.
+ */
+export function contrastGlyphColor(hex: string): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return GLYPH_DARK;
+  const luminance = relativeLuminance(rgb);
+  // Threshold of 0.5 on the 0..1 relative luminance scale: light fills get a
+  // dark glyph, dark fills get a light glyph.
+  return luminance > 0.5 ? GLYPH_DARK : GLYPH_LIGHT;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  const int = parseInt(match[1], 16);
+  return {
+    r: (int >> 16) & 255,
+    g: (int >> 8) & 255,
+    b: int & 255,
+  };
+}
+
+function relativeLuminance({ r, g, b }: { r: number; g: number; b: number }): number {
+  const [rl, gl, bl] = [r, g, b].map((channel) => {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+}
 
 function el<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
   return document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
@@ -123,9 +164,12 @@ function buildCells(pattern: Pattern, cellSize: number, leftGutter: number, topG
   for (let row = 0; row < pattern.rows; row++) {
     for (let col = 0; col < pattern.cols; col++) {
       const slot = getSlot(pattern, pattern.grid[row][col]);
+      const x = col * cellSize + leftGutter;
+      const y = row * cellSize + topGutter;
+
       const rect = el('rect');
-      rect.setAttribute('x', String(col * cellSize + leftGutter));
-      rect.setAttribute('y', String(row * cellSize + topGutter));
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', String(y));
       rect.setAttribute('width', String(cellSize));
       rect.setAttribute('height', String(cellSize));
       rect.setAttribute('fill', slot ? slot.hex : BLANK_FILL);
@@ -135,10 +179,45 @@ function buildCells(pattern: Pattern, cellSize: number, leftGutter: number, topG
       rect.setAttribute('data-row', String(row));
       rect.setAttribute('data-col', String(col));
       group.appendChild(rect);
+
+      const glyph = buildCellSymbol(slot, x, y, cellSize, row, col);
+      if (glyph) group.appendChild(glyph);
     }
   }
 
   return group;
+}
+
+/**
+ * The glyph text drawn on top of a stitched cell's color, per ticket 30 (v1
+ * decision: color + symbol together, since the export must still be legible
+ * in black-and-white or to a colorblind reader). Returns null for blank
+ * cells (no slot), which stay glyph-free.
+ */
+function buildCellSymbol(
+  slot: ReturnType<typeof getSlot>,
+  x: number,
+  y: number,
+  cellSize: number,
+  row: number,
+  col: number
+): SVGTextElement | null {
+  if (!slot) return null;
+  const glyph = SYMBOLS[slot.symbolId] ?? '';
+  if (!glyph) return null;
+
+  const text = el('text');
+  text.setAttribute('x', String(x + cellSize / 2));
+  text.setAttribute('y', String(y + cellSize / 2 + cellSize * TEXT_BASELINE_NUDGE_FACTOR));
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('font-size', String(cellSize * 0.6));
+  text.setAttribute('fill', contrastGlyphColor(slot.hex));
+  text.setAttribute('pointer-events', 'none');
+  text.setAttribute('data-role', 'cell-symbol');
+  text.setAttribute('data-row', String(row));
+  text.setAttribute('data-col', String(col));
+  text.textContent = glyph;
+  return text;
 }
 
 function buildColumnNumbers(
@@ -180,7 +259,7 @@ function buildRowNumbers(
     const absRow = row + rowOffset;
     const side = rowSide(absRow);
     const text = el('text');
-    const y = row * cellSize + topGutter + cellSize / 2 + cellSize * 0.18;
+    const y = row * cellSize + topGutter + cellSize / 2 + cellSize * TEXT_BASELINE_NUDGE_FACTOR;
     if (side === 'right') {
       text.setAttribute('x', String(leftGutter + pattern.cols * cellSize + cellSize * 0.3));
       text.setAttribute('text-anchor', 'start');

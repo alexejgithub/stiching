@@ -1,12 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { createPattern } from '../model/pattern';
-import { buildGridSVG } from './gridRenderer';
+import { SYMBOLS } from '../model/symbols';
+import { buildGridSVG, contrastGlyphColor } from './gridRenderer';
 
 describe('buildGridSVG', () => {
   it('renders one cell rect per grid cell', () => {
     const pattern = createPattern('T', 3, 4);
     const svg = buildGridSVG(pattern, { cellSize: 20 });
     expect(svg.querySelectorAll('[data-role="cell"]')).toHaveLength(12);
+  });
+
+  it('renders a cell-symbol glyph for every stitched cell, matching the slot symbol', () => {
+    const pattern = createPattern('T', 2, 2);
+    pattern.palette.push({ id: 1, hex: '#ff0000', label: 'Red', symbolId: 2, yarnLink: null });
+    pattern.grid[0][0] = 1;
+    pattern.grid[1][1] = 1;
+
+    const svg = buildGridSVG(pattern, { cellSize: 20 });
+    const glyphs = svg.querySelectorAll('[data-role="cell-symbol"]');
+    expect(glyphs).toHaveLength(2);
+    glyphs.forEach((g) => expect(g.textContent).toBe(SYMBOLS[2]));
+  });
+
+  it('leaves blank cells glyph-free', () => {
+    const pattern = createPattern('T', 2, 2);
+    pattern.palette.push({ id: 1, hex: '#ff0000', label: 'Red', symbolId: 0, yarnLink: null });
+    pattern.grid[0][0] = 1;
+    // grid[0][1], grid[1][0], grid[1][1] stay null (blank).
+
+    const svg = buildGridSVG(pattern, { cellSize: 20 });
+    expect(svg.querySelectorAll('[data-role="cell-symbol"]')).toHaveLength(1);
+  });
+
+  it('picks a light glyph color for dark fills and a dark glyph color for light fills', () => {
+    const pattern = createPattern('T', 1, 2);
+    pattern.palette.push(
+      { id: 1, hex: '#000000', label: 'Black', symbolId: 0, yarnLink: null },
+      { id: 2, hex: '#ffff00', label: 'Yellow', symbolId: 1, yarnLink: null }
+    );
+    pattern.grid[0][0] = 1;
+    pattern.grid[0][1] = 2;
+
+    const svg = buildGridSVG(pattern, { cellSize: 20 });
+    const glyphs = Array.from(svg.querySelectorAll('[data-role="cell-symbol"]'));
+    const onBlack = glyphs.find((g) => g.getAttribute('data-col') === '0')!;
+    const onYellow = glyphs.find((g) => g.getAttribute('data-col') === '1')!;
+
+    expect(onBlack.getAttribute('fill')).toBe(contrastGlyphColor('#000000'));
+    expect(onYellow.getAttribute('fill')).toBe(contrastGlyphColor('#ffff00'));
+    expect(onBlack.getAttribute('fill')).not.toBe(onYellow.getAttribute('fill'));
   });
 
   it('renders static column numbers 1..cols along the top', () => {
