@@ -60,4 +60,35 @@ describe('buildGridSVG', () => {
     expect(labelsOf(withoutOffset, 'column-number')).toEqual(labelsOf(withZeroOffset, 'column-number'));
     expect(labelsOf(withoutOffset, 'row-number')).toEqual(labelsOf(withZeroOffset, 'row-number'));
   });
+
+  // Ticket 29: column/row number <text> elements previously had no fill at
+  // all, so they inherited the SVG default black — invisible against the
+  // transparent, often dark-themed gutters. They need an explicit fill baked
+  // in (so exported/standalone SVGs are legible without any host CSS), with
+  // the live app additionally free to override it via CSS for theme-awareness.
+  it('gives column-number text elements an explicit fill attribute', () => {
+    const pattern = createPattern('T', 2, 2);
+    const svg = buildGridSVG(pattern, { cellSize: 20 });
+    const labels = svg.querySelectorAll('[data-role="column-number"]');
+    expect(labels.length).toBeGreaterThan(0);
+    labels.forEach((label) => {
+      const fill = label.getAttribute('fill');
+      expect(fill).toBeTruthy();
+      expect(fill).not.toBe('black');
+      expect(fill).not.toBe('#000000');
+    });
+  });
+
+  it('gives row-number text elements an explicit fill attribute', () => {
+    const pattern = createPattern('T', 2, 2);
+    const svg = buildGridSVG(pattern, { cellSize: 20 });
+    const labels = svg.querySelectorAll('[data-role="row-number"]');
+    expect(labels.length).toBeGreaterThan(0);
+    labels.forEach((label) => {
+      const fill = label.getAttribute('fill');
+      expect(fill).toBeTruthy();
+      expect(fill).not.toBe('black');
+      expect(fill).not.toBe('#000000');
+    });
+  });
 });
