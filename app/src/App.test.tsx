@@ -1,8 +1,16 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
 import { useEditorStore } from './store/editorStore';
+
+// Fresh in-memory IndexedDB per test: autosave (ticket 25) can write for real
+// during these tests (real timers, no mocking), so without this a write from
+// one test could leak into the next test's boot-load.
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+});
 
 afterEach(() => {
   useEditorStore.setState({ pattern: null });
@@ -13,7 +21,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'New Pattern' }));
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
     await user.clear(screen.getByLabelText('Name'));
     await user.type(screen.getByLabelText('Name'), 'Blanket');
     await user.click(screen.getByRole('button', { name: 'Create' }));
@@ -27,7 +35,7 @@ describe('App', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'New Pattern' }));
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
     const rowsInput = screen.getByLabelText('Rows');
     await user.clear(rowsInput);
     await user.type(rowsInput, '501');

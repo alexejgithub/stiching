@@ -4,6 +4,8 @@ import { PaletteEditor } from './components/PaletteEditor';
 import { PatternGrid } from './components/PatternGrid';
 import { ResizeDialog } from './components/ResizeDialog';
 import { Toolbar } from './components/Toolbar';
+import { startAutosave } from './persistence/autosave';
+import { loadPattern } from './persistence/db';
 import { useEditorStore } from './store/editorStore';
 
 // Text inputs (palette label field, dialogs) should keep native undo, not
@@ -18,6 +20,24 @@ export default function App() {
   const newPattern = useEditorStore((s) => s.newPattern);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [resizeDialogOpen, setResizeDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // On boot, resume the single autosaved record if one exists (ticket 25)
+  // instead of showing the New Pattern landing screen. `loading` avoids
+  // flashing that landing screen while the async load is in flight.
+  useEffect(() => {
+    let cancelled = false;
+    loadPattern().then((loaded) => {
+      if (cancelled) return;
+      if (loaded) useEditorStore.setState({ pattern: loaded });
+      setLoading(false);
+    });
+    const autosave = startAutosave();
+    return () => {
+      cancelled = true;
+      autosave.stop();
+    };
+  }, []);
 
   useEffect(() => {
     const ARROW_DELTAS: Record<string, [number, number]> = {
@@ -61,6 +81,10 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  if (loading) {
+    return null;
+  }
 
   if (!pattern) {
     return (
