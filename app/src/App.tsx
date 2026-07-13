@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NewPatternDialog } from './components/NewPatternDialog';
 import { PaletteEditor } from './components/PaletteEditor';
 import { PatternGrid } from './components/PatternGrid';
 import { ResizeDialog } from './components/ResizeDialog';
 import { Toolbar } from './components/Toolbar';
 import { startAutosave } from './persistence/autosave';
-import { loadPattern } from './persistence/db';
+import { loadPattern, savePattern } from './persistence/db';
+import { exportPattern, importPattern } from './persistence/file';
 import { useEditorStore } from './store/editorStore';
 
 // Text inputs (palette label field, dialogs) should keep native undo, not
@@ -21,6 +22,8 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [resizeDialogOpen, setResizeDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // On boot, resume the single autosaved record if one exists (ticket 25)
   // instead of showing the New Pattern landing screen. `loading` avoids
@@ -82,6 +85,21 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Replacing the current in-progress pattern (New Pattern or a successful
+  // import) saves immediately rather than waiting on autosave's ~1.5s
+  // debounce, so the single IndexedDB slot never briefly holds a stale prior
+  // pattern after a deliberate replacement.
+  async function handleImportFile(file: File) {
+    try {
+      const imported = await importPattern(file);
+      useEditorStore.setState({ pattern: imported });
+      setImportError(null);
+      await savePattern(imported);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Failed to import file.');
+    }
+  }
+
   if (loading) {
     return null;
   }
@@ -96,6 +114,8 @@ export default function App() {
             onCreate={(name, rows, cols) => {
               newPattern(name, rows, cols);
               setDialogOpen(false);
+              const created = useEditorStore.getState().pattern;
+              if (created) void savePattern(created);
             }}
             onCancel={() => setDialogOpen(false)}
           />
@@ -111,6 +131,24 @@ export default function App() {
         <button type="button" onClick={() => setResizeDialogOpen(true)}>
           Resize
         </button>
+        <button type="button" onClick={() => exportPattern(pattern)}>
+          Export
+        </button>
+        <button type="button" onClick={() => importInputRef.current?.click()}>
+          Import
+        </button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".crochet"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void handleImportFile(file);
+          }}
+        />
+        {importError && <p role="alert">{importError}</p>}
       </header>
       <Toolbar />
       <div className="editor-body">
