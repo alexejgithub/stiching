@@ -47,4 +47,4 @@ Verified via:
 - `npm run typecheck` and `npm test` (`npx vitest run`) both pass: 148 tests across 14 files, 0 failures.
 - Ran the `code-review` skill (Standards + Spec sub-agents) against the diff; addressed both real findings it raised: deduplicated the seeded-slot construction to route through `addSlot` instead of reimplementing its id/symbol formula, and added the two test gaps it flagged (end-to-end editability of a seeded slot, and an explicit `replacePattern`-preserves-empty-palette test).
 
-Commit: `<pending>`
+Commit: `63e8161`
