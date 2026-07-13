@@ -4,15 +4,19 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] New Pattern dialog asks for name, rows, and columns only
-- [ ] Dialog defaults to 20×20
-- [ ] Rows and columns are each bounded to 1–500; an out-of-range value (e.g. an extra zero) is rejected rather than silently creating an oversized grid
-- [ ] A newly created Pattern starts fully blank (empty palette, every Cell blank) — no leftover state from a prior session
-- [ ] The Pattern's top-level `id` is a `crypto.randomUUID()`; Slot ids are minted from a per-Pattern monotonically increasing `nextSlotId` counter (not yet exercised until ticket 20, but present in the schema)
-- [ ] Cells store a reference to a Slot's stable id (or null for Blank), never a position into the palette array
-- [ ] The grid renders via one shared SVG rendering module (not duplicated between screens), one element per cell
-- [ ] Column numbers appear along the top of the grid, consistent regardless of row
-- [ ] Row numbers alternate sides by parity: odd rows numbered on the right, even rows on the left
-- [ ] Store action API (or the pure functions it wraps) has tests asserting the resulting `Pattern` state for: creating a pattern at valid/boundary/out-of-bounds dimensions, and the blank initial state
+- [x] New Pattern dialog asks for name, rows, and columns only
+- [x] Dialog defaults to 20×20
+- [x] Rows and columns are each bounded to 1–500; an out-of-range value (e.g. an extra zero) is rejected rather than silently creating an oversized grid
+- [x] A newly created Pattern starts fully blank (empty palette, every Cell blank) — no leftover state from a prior session
+- [x] The Pattern's top-level `id` is a `crypto.randomUUID()`; Slot ids are minted from a per-Pattern monotonically increasing `nextSlotId` counter (not yet exercised until ticket 20, but present in the schema)
+- [x] Cells store a reference to a Slot's stable id (or null for Blank), never a position into the palette array
+- [x] The grid renders via one shared SVG rendering module (not duplicated between screens), one element per cell
+- [x] Column numbers appear along the top of the grid, consistent regardless of row
+- [x] Row numbers alternate sides by parity: odd rows numbered on the right, even rows on the left
+- [x] Store action API (or the pure functions it wraps) has tests asserting the resulting `Pattern` state for: creating a pattern at valid/boundary/out-of-bounds dimensions, and the blank initial state
+
+## Comments
+
+Implemented in [app/](../../../app/) — `src/model/pattern.ts`, `src/render/gridRenderer.ts`, `src/store/editorStore.ts`, `src/components/NewPatternDialog.tsx`. Verified live in-browser (New Pattern dialog → blank grid with correct numbering) and via `src/model/pattern.test.ts` / `src/render/gridRenderer.test.ts`. Commit: `cd4a04c`.

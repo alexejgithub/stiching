@@ -4,11 +4,15 @@
 
 **Blocked by:** 19, 20
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] With an active Slot selected, click or drag across cells paints them with that Slot
-- [ ] Selecting erase (or the equivalent) and dragging clears cells back to Blank rather than requiring a "background color" repaint
-- [ ] Painting and erasing are driven entirely through Pointer Events (covers mouse, stylus, and touch through one code path)
-- [ ] A single continuous drag (pointer down to pointer up) is tracked as one coherent stroke unit in the dispatched store action, even though undo/redo doesn't exist yet — this sets up ticket 22 to coalesce it into one undo step without reworking the paint action shape
-- [ ] The grid surface sets `touch-action: none` so dragging to paint doesn't trigger page scroll/zoom gestures
-- [ ] Store action API tests cover: paint a single cell, paint a dragged run of cells, erase a single cell, erase a dragged run, and painting/erasing at grid edges/corners
+- [x] With an active Slot selected, click or drag across cells paints them with that Slot
+- [x] Selecting erase (or the equivalent) and dragging clears cells back to Blank rather than requiring a "background color" repaint
+- [x] Painting and erasing are driven entirely through Pointer Events (covers mouse, stylus, and touch through one code path)
+- [x] A single continuous drag (pointer down to pointer up) is tracked as one coherent stroke unit in the dispatched store action, even though undo/redo doesn't exist yet — this sets up ticket 22 to coalesce it into one undo step without reworking the paint action shape
+- [x] The grid surface sets `touch-action: none` so dragging to paint doesn't trigger page scroll/zoom gestures
+- [x] Store action API tests cover: paint a single cell, paint a dragged run of cells, erase a single cell, erase a dragged run, and painting/erasing at grid edges/corners
+
+## Comments
+
+Implemented in [app/](../../../app/) — `src/model/paint.ts`, `src/components/Toolbar.tsx`, Pointer Events wiring in `src/components/PatternGrid.tsx`, `beginStroke`/`continueStroke`/`endStroke` in `src/store/editorStore.ts`. Verified live in-browser (drag-paint and eraser both confirmed) and via `src/model/paint.test.ts` / `src/store/editorStore.test.ts`. Commit: `a7d01d3`.
