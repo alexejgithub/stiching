@@ -45,4 +45,4 @@ Verified via:
 - `npm test` (full suite) — 147/147 passing.
 - `code-review` skill run on the diff (Standards + Spec axes in parallel): no hard standard violations found; two minor judgement-call smells noted (a hardcoded hex coincidentally duplicating `--text`'s light value, and a small "shotgun surgery" risk if a 7th chrome-text role is ever added) — both accepted as reasonable trade-offs given the small fixed scope. Spec review confirmed no scope creep into tickets 30/31/32 and that both the live-editor and standalone-export legibility requirements are genuinely met; it flagged that the ticket's alternative suggestion of also adding a gutter background rect wasn't done — left out deliberately since the task instructions scoped this fix to "the fill/color issue on numbering and chrome text only," and the ticket phrased the background-rect approach as an alternative ("bake in a fixed dark color ... **or** ... a light gutter background rect"), not an additional requirement.
 
-Commit: `<pending>`
+Commit: `92b0f01`
