@@ -17,6 +17,37 @@ function isTextInput(target: EventTarget | null): boolean {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 }
 
+// Reachable both from the landing screen (nothing open yet) and from the
+// editor chrome (replacing the current in-progress pattern) — same control
+// either way, per the "one pattern open at a time" replace-current model.
+interface ImportControlProps {
+  onFile: (file: File) => void;
+  error: string | null;
+}
+
+function ImportControl({ onFile, error }: ImportControlProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button type="button" onClick={() => inputRef.current?.click()}>
+        Import
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".crochet"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) onFile(file);
+        }}
+      />
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
+}
+
 export default function App() {
   const pattern = useEditorStore((s) => s.pattern);
   const newPattern = useEditorStore((s) => s.newPattern);
@@ -25,7 +56,6 @@ export default function App() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [importError, setImportError] = useState<string | null>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
 
   // On boot, resume the single autosaved record if one exists (ticket 25)
   // instead of showing the New Pattern landing screen. `loading` avoids
@@ -34,7 +64,7 @@ export default function App() {
     let cancelled = false;
     loadPattern().then((loaded) => {
       if (cancelled) return;
-      if (loaded) useEditorStore.setState({ pattern: loaded });
+      if (loaded) useEditorStore.getState().replacePattern(loaded);
       setLoading(false);
     });
     const autosave = startAutosave();
@@ -94,7 +124,7 @@ export default function App() {
   async function handleImportFile(file: File) {
     try {
       const imported = await importPattern(file);
-      useEditorStore.setState({ pattern: imported });
+      useEditorStore.getState().replacePattern(imported);
       setImportError(null);
       await savePattern(imported);
     } catch (err) {
@@ -111,6 +141,7 @@ export default function App() {
       <main className="landing">
         <h1>Crochet Pattern Editor</h1>
         <button onClick={() => setDialogOpen(true)}>New Pattern</button>
+        <ImportControl onFile={(file) => void handleImportFile(file)} error={importError} />
         {dialogOpen && (
           <NewPatternDialog
             onCreate={(name, rows, cols) => {
@@ -136,24 +167,10 @@ export default function App() {
         <button type="button" onClick={() => exportPattern(pattern)}>
           Export
         </button>
-        <button type="button" onClick={() => importInputRef.current?.click()}>
-          Import
-        </button>
+        <ImportControl onFile={(file) => void handleImportFile(file)} error={importError} />
         <button type="button" onClick={() => setExportDialogOpen(true)}>
           Export / Print (SVG)
         </button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".crochet"
-          hidden
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) void handleImportFile(file);
-          }}
-        />
-        {importError && <p role="alert">{importError}</p>}
       </header>
       <Toolbar />
       <div className="editor-body">

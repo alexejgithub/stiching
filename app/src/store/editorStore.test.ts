@@ -971,3 +971,34 @@ describe('previewResize / applyResize', () => {
     expect(useEditorStore.getState().selection).toBeNull();
   });
 });
+
+describe('replacePattern', () => {
+  it('resets undo/redo history, tool, active slot, and any floating selection to the incoming pattern', () => {
+    useEditorStore.getState().addSlot('#ff0000', 'Red');
+    const slotId = useEditorStore.getState().pattern!.palette[0].id;
+    useEditorStore.getState().setActiveSlot(slotId);
+    useEditorStore.getState().beginStroke(0, 0);
+    useEditorStore.getState().endStroke();
+    useEditorStore.getState().setTool('select');
+    useEditorStore.getState().selectAll();
+    expect(useEditorStore.getState().canUndo).toBe(true);
+    expect(useEditorStore.getState().selection).not.toBeNull();
+
+    const incoming = useEditorStore.getState().pattern!;
+    const smaller = { ...incoming, rows: 1, cols: 1, grid: [[null]] };
+    useEditorStore.getState().replacePattern(smaller);
+
+    expect(useEditorStore.getState().pattern).toBe(smaller);
+    expect(useEditorStore.getState().canUndo).toBe(false);
+    expect(useEditorStore.getState().canRedo).toBe(false);
+    expect(useEditorStore.getState().undoStack).toEqual([]);
+    expect(useEditorStore.getState().tool).toBe('draw');
+    expect(useEditorStore.getState().activeSlotId).toBeNull();
+    expect(useEditorStore.getState().selection).toBeNull();
+
+    // The old pattern's undo history is gone, so undo is a no-op rather than
+    // replaying a stale diff against the new (smaller) grid and crashing.
+    expect(() => useEditorStore.getState().undo()).not.toThrow();
+    expect(useEditorStore.getState().pattern).toBe(smaller);
+  });
+});

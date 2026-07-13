@@ -5,7 +5,9 @@
 
 import { type Cell, type Pattern, type Slot } from '../model/pattern';
 
-function sanitizeFileName(name: string): string {
+// Shared with exportSvg.ts (SVG export/print file names) — one filesystem-
+// safe-name rule for every downloadable artifact this app produces.
+export function sanitizeFileName(name: string): string {
   const trimmed = name.trim().replace(/[\\/:*?"<>|]/g, '_');
   return trimmed.length > 0 ? trimmed : 'pattern';
 }

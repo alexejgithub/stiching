@@ -6,11 +6,7 @@
 import { type Pattern } from '../model/pattern';
 import { A4_PORTRAIT_MM, DEFAULT_CELL_SIZE_MM, type PageSizeMm } from '../render/exportLayout';
 import { buildExportPages } from '../render/exportRenderer';
-
-function sanitizeFileName(name: string): string {
-  const trimmed = name.trim().replace(/[\\/:*?"<>|]/g, '_');
-  return trimmed.length > 0 ? trimmed : 'pattern';
-}
+import { sanitizeFileName } from './file';
 
 function serializeSVG(svg: SVGSVGElement): string {
   return new XMLSerializer().serializeToString(svg);

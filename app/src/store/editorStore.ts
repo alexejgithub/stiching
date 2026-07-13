@@ -92,6 +92,7 @@ export interface EditorState {
   selectionOrigin: Pattern | null; // pattern snapshot from just before the active selection's lift, used to diff on commit
   selectionGrab: { dr: number; dc: number } | null; // pointer-to-anchor offset captured at the start of a move-drag
   newPattern: (name: string, rows: number, cols: number) => void;
+  replacePattern: (pattern: Pattern) => void;
   setTool: (tool: Tool) => void;
   setActiveSlot: (slotId: SlotId | null) => void;
   beginStroke: (row: number, col: number) => void;
@@ -122,6 +123,24 @@ export interface EditorState {
 
 function historyFlags(undoStack: Command[], redoStack: Command[]) {
   return { undoStack, redoStack, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 };
+}
+
+// The session state every "swap in a whole new pattern" entry point
+// (newPattern, replacePattern) must reset: undo/redo history, tool, active
+// slot, and any in-progress stroke or floating selection all belong to
+// whatever pattern was open before and must never carry over.
+function freshPatternState() {
+  return {
+    tool: 'draw' as const,
+    activeSlotId: null,
+    stroke: null,
+    selection: null,
+    marqueeStart: null,
+    marqueeRect: null,
+    selectionOrigin: null,
+    selectionGrab: null,
+    ...historyFlags([], []),
+  };
 }
 
 function pushToUndoStack(undoStack: Command[], command: Command): Command[] {
@@ -270,18 +289,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectionOrigin: null,
   selectionGrab: null,
   newPattern: (name, rows, cols) =>
-    set({
-      pattern: createPattern(name, rows, cols),
-      tool: 'draw',
-      activeSlotId: null,
-      stroke: null,
-      selection: null,
-      marqueeStart: null,
-      marqueeRect: null,
-      selectionOrigin: null,
-      selectionGrab: null,
-      ...historyFlags([], []),
-    }),
+    set({ pattern: createPattern(name, rows, cols), ...freshPatternState() }),
+  // Swaps in an already-built Pattern (import, ticket 26; boot-load from
+  // autosave, ticket 25) with the exact same session-state reset newPattern
+  // does — undo/redo history, selection, tool, and active slot all belong to
+  // whatever pattern was open before, and stale undo diffs replayed against a
+  // differently-shaped incoming grid can index out of bounds.
+  replacePattern: (pattern) => set({ pattern, ...freshPatternState() }),
   // Switching tools commits whatever selection is currently floating (a
   // no-op when nothing is floating) before changing `tool`.
   setTool: (tool) => {
