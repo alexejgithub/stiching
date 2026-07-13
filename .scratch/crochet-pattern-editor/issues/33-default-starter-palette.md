@@ -2,7 +2,7 @@
 
 **Requested by:** user, 2026-07-13
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## What to build
 
@@ -30,8 +30,21 @@ Suggested 8 hues (evenly spaced, high-contrast, colorblind-friendlier than a raw
 
 ## Acceptance criteria
 
-- [ ] `createPattern` returns a pattern with 8 pre-populated palette slots at the hues above (or an equivalently spread substitute), correct auto-assigned symbols, and `nextSlotId = 9`
-- [ ] `NewPatternDialog` → `store.newPattern` flow shows the 8 colors ready to paint with immediately, no palette-editor trip required first
-- [ ] Imported (`.crochet` file) and autosave-restored patterns are unaffected — their saved palette (including empty) is preserved exactly
-- [ ] Each default slot behaves identically to a manually-added slot: renamable, recolorable, reorderable, deletable (including the "in use" block/clear-cells prompt)
-- [ ] A test in `pattern.test.ts` (or wherever `createPattern` is covered) asserts the seeded palette's length, hexes, symbol ids, and resulting `nextSlotId`
+- [x] `createPattern` returns a pattern with 8 pre-populated palette slots at the hues above (or an equivalently spread substitute), correct auto-assigned symbols, and `nextSlotId = 9`
+- [x] `NewPatternDialog` → `store.newPattern` flow shows the 8 colors ready to paint with immediately, no palette-editor trip required first
+- [x] Imported (`.crochet` file) and autosave-restored patterns are unaffected — their saved palette (including empty) is preserved exactly
+- [x] Each default slot behaves identically to a manually-added slot: renamable, recolorable, reorderable, deletable (including the "in use" block/clear-cells prompt)
+- [x] A test in `pattern.test.ts` (or wherever `createPattern` is covered) asserts the seeded palette's length, hexes, symbol ids, and resulting `nextSlotId`
+
+## Comments
+
+Implemented in [app/](../../../app/) — `src/model/pattern.ts`'s `createPattern` now builds its palette by folding the 8 hues above through `addSlot` (`src/model/palette.ts`) starting from a blank pattern, so seeded slots are minted through the exact same id/symbol-assignment code path as a manually-added slot (id 1-8, `nextSlotId` ends at 9, symbols 0-7 from `SYMBOLS` in add-order) — nothing about them is special-cased. `replacePattern` (`src/store/editorStore.ts`, used by import and autosave boot-load) was left untouched and still assigns the incoming pattern's palette verbatim, including a deliberately empty one.
+
+Verified via:
+- `app/src/model/pattern.test.ts` — new `createPattern` test asserting the seeded palette's length, hexes (in order), symbol ids, slot ids, `nextSlotId = 9`, and that no seeded slot carries a yarn link.
+- `app/src/store/editorStore.test.ts` — new `newPattern` describe block: one test confirming the store-level seed, and one end-to-end test that paints with a seeded slot then renames/recolors/reorders/deletes it (including the blocked-while-in-use case) to prove it behaves exactly like a hand-added slot. A new `replacePattern` test confirms an incoming pattern with an empty palette stays empty (no seeding injected on top).
+- Existing suites that previously assumed `createPattern` returned an empty palette (`app/src/model/palette.test.ts`, the rest of `app/src/store/editorStore.test.ts`) were adjusted to start from an explicit blank palette so they keep testing `addSlot`/`deleteSlot`/paint mechanics in isolation from the new seed, rather than silently drifting to index into the seeded slots instead of the ones they add.
+- `npm run typecheck` and `npm test` (`npx vitest run`) both pass: 148 tests across 14 files, 0 failures.
+- Ran the `code-review` skill (Standards + Spec sub-agents) against the diff; addressed both real findings it raised: deduplicated the seeded-slot construction to route through `addSlot` instead of reimplementing its id/symbol formula, and added the two test gaps it flagged (end-to-end editability of a seeded slot, and an explicit `replacePattern`-preserves-empty-palette test).
+
+Commit: `<pending>`

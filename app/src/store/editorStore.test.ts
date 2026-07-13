@@ -7,6 +7,52 @@ afterEach(() => {
 
 beforeEach(() => {
   useEditorStore.getState().newPattern('T', 2, 2);
+  // newPattern seeds an 8-slot starter palette (ticket 33, covered by the
+  // 'newPattern' describe block below and by pattern.test.ts). The rest of
+  // this file exercises addSlot/deleteSlot/paint/undo mechanics against a
+  // blank starting palette, so reset it here to keep those tests focused on
+  // the mechanics rather than the seed's exact contents.
+  useEditorStore.setState((s) => ({ pattern: { ...s.pattern!, palette: [], nextSlotId: 1 } }));
+});
+
+describe('newPattern', () => {
+  it('seeds an 8-slot starter palette ready to paint with immediately', () => {
+    useEditorStore.getState().newPattern('T', 2, 2);
+    const pattern = useEditorStore.getState().pattern!;
+    expect(pattern.palette).toHaveLength(8);
+    expect(pattern.nextSlotId).toBe(9);
+    expect(pattern.palette.map((s) => s.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('treats a seeded slot exactly like a manually-added one: renamable, recolorable, reorderable, and deletable', () => {
+    useEditorStore.getState().newPattern('T', 2, 2);
+    const [firstId, secondId] = useEditorStore.getState().pattern!.palette.map((s) => s.id);
+
+    useEditorStore.getState().setActiveSlot(firstId);
+    useEditorStore.getState().beginStroke(0, 0);
+    useEditorStore.getState().endStroke();
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(firstId);
+
+    useEditorStore.getState().renameSlot(firstId, 'My Red');
+    useEditorStore.getState().recolorSlot(firstId, '#123456');
+    let first = useEditorStore.getState().pattern!.palette.find((s) => s.id === firstId);
+    expect(first).toMatchObject({ label: 'My Red', hex: '#123456' });
+
+    useEditorStore.getState().reorderSlot(0, 1);
+    expect(useEditorStore.getState().pattern!.palette.map((s) => s.id)[1]).toBe(firstId);
+
+    // Deletion is blocked while the painted cell still references it, just
+    // like any other slot's "in use" guard.
+    const blocked = useEditorStore.getState().deleteSlot(firstId);
+    expect(blocked).toEqual({ ok: false, reason: 'in-use', cellCount: 1 });
+
+    const cleared = useEditorStore.getState().deleteSlot(firstId, { clearCells: true });
+    expect(cleared?.ok).toBe(true);
+    expect(useEditorStore.getState().pattern!.grid[0][0]).toBeNull();
+    expect(useEditorStore.getState().pattern!.palette.find((s) => s.id === firstId)).toBeUndefined();
+    // The other seeded slots are untouched.
+    expect(useEditorStore.getState().pattern!.palette.some((s) => s.id === secondId)).toBe(true);
+  });
 });
 
 describe('addSlot', () => {
@@ -1000,5 +1046,18 @@ describe('replacePattern', () => {
     // replaying a stale diff against the new (smaller) grid and crashing.
     expect(() => useEditorStore.getState().undo()).not.toThrow();
     expect(useEditorStore.getState().pattern).toBe(smaller);
+  });
+
+  it('preserves an incoming pattern with a deliberately empty palette exactly, unlike newPattern', () => {
+    // The current pattern (from beforeEach) has its palette reset to empty,
+    // simulating a real newPattern seed (8 slots) already stripped away by
+    // the user. replacePattern (the import/autosave-restore path, ticket 33)
+    // must not seed anything on top of an incoming empty palette.
+    const incoming = { ...useEditorStore.getState().pattern!, palette: [], nextSlotId: 1 };
+
+    useEditorStore.getState().replacePattern(incoming);
+
+    expect(useEditorStore.getState().pattern!.palette).toEqual([]);
+    expect(useEditorStore.getState().pattern!.nextSlotId).toBe(1);
   });
 });
