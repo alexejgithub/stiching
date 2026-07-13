@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NewPatternDialog } from './components/NewPatternDialog';
 import { PaletteEditor } from './components/PaletteEditor';
 import { PatternGrid } from './components/PatternGrid';
+import { ResizeDialog } from './components/ResizeDialog';
 import { Toolbar } from './components/Toolbar';
 import { useEditorStore } from './store/editorStore';
 
@@ -16,6 +17,7 @@ export default function App() {
   const pattern = useEditorStore((s) => s.pattern);
   const newPattern = useEditorStore((s) => s.newPattern);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [resizeDialogOpen, setResizeDialogOpen] = useState(false);
 
   useEffect(() => {
     const ARROW_DELTAS: Record<string, [number, number]> = {
@@ -82,12 +84,16 @@ export default function App() {
     <div className="editor">
       <header className="editor-header">
         <h1>{pattern.name}</h1>
+        <button type="button" onClick={() => setResizeDialogOpen(true)}>
+          Resize
+        </button>
       </header>
       <Toolbar />
       <div className="editor-body">
         <PatternGrid pattern={pattern} />
         <PaletteEditor />
       </div>
+      {resizeDialogOpen && <ResizeDialog onClose={() => setResizeDialogOpen(false)} />}
     </div>
   );
 }

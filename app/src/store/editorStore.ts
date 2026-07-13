@@ -3,6 +3,8 @@ import { type Cell, type Pattern, type Slot, type SlotId, createPattern } from '
 import * as palette from '../model/palette';
 import { type DeleteSlotResult } from '../model/palette';
 import { paintCell } from '../model/paint';
+import * as resize from '../model/resize';
+import { type ResizeEdges, type ResizePreview } from '../model/resize';
 import {
   type Rect,
   clampAnchor,
@@ -39,14 +41,25 @@ interface PaletteSnapshot {
   nextSlotId: number;
 }
 
-// Invertible per-cell diffs (cost scales with edit size) or a whole-palette
-// before/after snapshot (the palette array is always small, bounded by the
-// user's color count, not grid size) — see ticket 22. `cellDiffs` on a
-// palette command covers deleteSlot's clearCells option, the one palette
-// action that also touches the grid; it's empty for every other palette op.
+interface GridSnapshot {
+  rows: number;
+  cols: number;
+  grid: Cell[][];
+}
+
+// Invertible per-cell diffs (cost scales with edit size) or a whole-palette /
+// whole-grid before/after snapshot (the palette array is always small,
+// bounded by the user's color count, not grid size; a resize's grid snapshot
+// is acceptable for the same reason paint strokes use diffs instead — resize
+// is a rare, deliberate, whole-grid-shape-changing action, not a
+// high-frequency edit where snapshot cost would add up) — see ticket 22.
+// `cellDiffs` on a palette command covers deleteSlot's clearCells option, the
+// one palette action that also touches the grid; it's empty for every other
+// palette op.
 export type Command =
   | { kind: 'cells'; diffs: CellDiff[] }
-  | { kind: 'palette'; before: PaletteSnapshot; after: PaletteSnapshot; cellDiffs: CellDiff[] };
+  | { kind: 'palette'; before: PaletteSnapshot; after: PaletteSnapshot; cellDiffs: CellDiff[] }
+  | { kind: 'resize'; before: GridSnapshot; after: GridSnapshot };
 
 const MAX_HISTORY = 100;
 
@@ -90,6 +103,8 @@ export interface EditorState {
   recolorSlot: (slotId: SlotId, hex: string) => void;
   reorderSlot: (fromIndex: number, toIndex: number) => void;
   deleteSlot: (slotId: SlotId, options?: { clearCells?: boolean }) => DeleteSlotResult | undefined;
+  previewResize: (edges: ResizeEdges) => ResizePreview | undefined;
+  applyResize: (edges: ResizeEdges) => void;
   undo: () => void;
   redo: () => void;
   beginMarqueeDrag: (row: number, col: number) => void;
@@ -122,6 +137,10 @@ function applyCommand(pattern: Pattern, command: Command, direction: 'before' | 
     const grid = command.cellDiffs.length > 0 ? applyCellDiffs(pattern.grid, command.cellDiffs, direction) : pattern.grid;
     return { ...pattern, grid, palette: snapshot.palette, nextSlotId: snapshot.nextSlotId };
   }
+  if (command.kind === 'resize') {
+    const snapshot = command[direction];
+    return { ...pattern, rows: snapshot.rows, cols: snapshot.cols, grid: snapshot.grid };
+  }
   return { ...pattern, grid: applyCellDiffs(pattern.grid, command.diffs, direction) };
 }
 
@@ -134,13 +153,18 @@ function applyCellDiffs(grid: Cell[][], diffs: CellDiff[], direction: 'before' |
   return nextGrid;
 }
 
-// Cells that changed between two grids of the same dimensions (used for
-// deleteSlot's clearCells option, where the pure model function clears every
-// cell referencing the deleted slot in one pass).
+// Cells that changed between two grids. `before`/`after` are normally the
+// same dimensions (deleteSlot's clearCells option; a selection commit with no
+// intervening resize) — bounding the scan to the overlap is a no-op then. It
+// also means a resize applied while a selection was floating (ticket 24)
+// can't make this index outside either grid's actual bounds when the
+// selection is later committed against a since-resized pattern.
 function diffGrids(before: Pattern, after: Pattern): CellDiff[] {
   const diffs: CellDiff[] = [];
-  for (let row = 0; row < before.rows; row++) {
-    for (let col = 0; col < before.cols; col++) {
+  const rows = Math.min(before.rows, after.rows);
+  const cols = Math.min(before.cols, after.cols);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
       if (before.grid[row][col] !== after.grid[row][col]) {
         diffs.push({ row, col, before: before.grid[row][col], after: after.grid[row][col] });
       }
@@ -166,7 +190,20 @@ function commitFloatingSelection(get: () => EditorState, set: (partial: Partial<
     set(clearFields);
     return;
   }
-  const stamped = stampBlock(pattern, selection.block, selection.anchorRow, selection.anchorCol);
+  // A resize applied while this selection was floating (ticket 24) can leave
+  // anchorRow/anchorCol pointing outside the current pattern — resize
+  // deliberately doesn't touch selection state. Re-clamp here with the same
+  // policy rotate/nudge already use, rather than stamping at a stale anchor
+  // that could index outside the grid. If the block no longer fits anywhere
+  // (grid shrunk smaller than it), drop the stamp instead of crashing.
+  const h = selection.block.length;
+  const w = selection.block[0]?.length ?? 0;
+  const clamped = clampAnchor(selection.anchorRow, selection.anchorCol, h, w, pattern.rows, pattern.cols);
+  if (!clamped) {
+    set({ pattern, ...clearFields });
+    return;
+  }
+  const stamped = stampBlock(pattern, selection.block, clamped.row, clamped.col);
   const diffs = diffGrids(selectionOrigin, stamped);
   if (diffs.length === 0) {
     set({ pattern: stamped, ...clearFields });
@@ -397,6 +434,34 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       pushPaletteCommand(get, set, pattern, result.pattern, diffGrids(pattern, result.pattern));
     }
     return result;
+  },
+  // Read-only: reports the resulting dimensions and how many stitched cells
+  // a shrink would discard, without applying anything, so the ResizeDialog
+  // can decide whether to show a confirmation before calling applyResize.
+  previewResize: (edges) => {
+    const pattern = get().pattern;
+    if (!pattern) return undefined;
+    return resize.previewResize(pattern, edges);
+  },
+  // Applies a resize as a single 'resize' Command (whole before/after grid
+  // snapshot, not per-cell diffs — see the Command union comment). A no-op if
+  // the pattern is missing or the edges would land out of bounds; callers
+  // that already ran previewResize get the same answer here for free.
+  // Deliberately does not touch a floating selection (selection/marqueeRect/
+  // etc.) even if its anchor now points outside the resized grid —
+  // commitFloatingSelection re-clamps defensively when it's next committed.
+  applyResize: (edges) => {
+    const { pattern, undoStack } = get();
+    if (!pattern) return;
+    const preview = resize.previewResize(pattern, edges);
+    if (!preview.ok) return;
+    const after = resize.resizePattern(pattern, edges);
+    const command: Command = {
+      kind: 'resize',
+      before: { rows: pattern.rows, cols: pattern.cols, grid: pattern.grid },
+      after: { rows: after.rows, cols: after.cols, grid: after.grid },
+    };
+    set({ pattern: after, ...historyFlags(pushToUndoStack(undoStack, command), []) });
   },
   undo: () => {
     const { pattern, undoStack, redoStack } = get();

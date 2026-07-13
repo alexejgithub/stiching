@@ -809,3 +809,165 @@ describe('floating selection commit', () => {
     expect(useEditorStore.getState().pattern!.grid[0][0]).toBe(4);
   });
 });
+
+describe('previewResize / applyResize', () => {
+  it('grows each edge independently, padding Blank cells and leaving content in its absolute position', () => {
+    useEditorStore.getState().newPattern('T', 3, 3);
+    setGrid([[0, 0, 5]]);
+
+    useEditorStore.getState().applyResize({ top: 1, bottom: 0, left: 0, right: 0 });
+    let pattern = useEditorStore.getState().pattern!;
+    expect(pattern.rows).toBe(4);
+    expect(pattern.cols).toBe(3);
+    expect(pattern.grid[1][0]).toBe(5); // shifted down by the grown top edge
+
+    useEditorStore.getState().applyResize({ top: 0, bottom: 2, left: 0, right: 0 });
+    pattern = useEditorStore.getState().pattern!;
+    expect(pattern.rows).toBe(6);
+    expect(pattern.grid[1][0]).toBe(5); // bottom growth never shifts existing content
+
+    useEditorStore.getState().applyResize({ top: 0, bottom: 0, left: 3, right: 1 });
+    pattern = useEditorStore.getState().pattern!;
+    expect(pattern.cols).toBe(7);
+    expect(pattern.grid[1][3]).toBe(5); // shifted right by the grown left edge
+  });
+
+  it('grows all four edges together as one combined resize', () => {
+    useEditorStore.getState().newPattern('T', 2, 2);
+    setGrid([[0, 0, 9]]);
+
+    useEditorStore.getState().applyResize({ top: 1, bottom: 1, left: 1, right: 1 });
+
+    const pattern = useEditorStore.getState().pattern!;
+    expect(pattern.rows).toBe(4);
+    expect(pattern.cols).toBe(4);
+    expect(pattern.grid[1][1]).toBe(9);
+    expect(pattern.grid.flat().filter((c) => c !== null)).toEqual([9]);
+  });
+
+  it('shrinking Blank-only space applies immediately with no confirmation-required signal', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([[2, 2, 3]]); // safely inside the shrunk-to region
+
+    const preview = useEditorStore.getState().previewResize({ top: -1, bottom: -1, left: -1, right: -1 });
+    expect(preview).toEqual({ ok: true, rows: 3, cols: 3, lostStitchedCellCount: 0 });
+
+    useEditorStore.getState().applyResize({ top: -1, bottom: -1, left: -1, right: -1 });
+    const pattern = useEditorStore.getState().pattern!;
+    expect(pattern.rows).toBe(3);
+    expect(pattern.cols).toBe(3);
+    expect(pattern.grid[1][1]).toBe(3); // (2,2) shifted to (1,1) once top/left each shrank by 1
+  });
+
+  it('shrinking that would discard stitched cells reports the exact loss count and does not mutate until applied', () => {
+    useEditorStore.getState().newPattern('T', 4, 4);
+    setGrid([
+      [0, 0, 1],
+      [3, 3, 2],
+    ]); // both in the region a -1/-1/-1/-1 shrink would drop
+
+    const gridBefore = useEditorStore.getState().pattern!.grid;
+    const preview = useEditorStore.getState().previewResize({ top: -1, bottom: -1, left: -1, right: -1 });
+
+    expect(preview).toEqual({ ok: true, rows: 2, cols: 2, lostStitchedCellCount: 2 });
+    // previewing must not have touched the pattern
+    expect(useEditorStore.getState().pattern!.grid).toBe(gridBefore);
+    expect(useEditorStore.getState().pattern!.rows).toBe(4);
+
+    useEditorStore.getState().applyResize({ top: -1, bottom: -1, left: -1, right: -1 });
+    const pattern = useEditorStore.getState().pattern!;
+    expect(pattern.rows).toBe(2);
+    expect(pattern.grid.flat().every((c) => c === null)).toBe(true); // both stitched cells were discarded
+  });
+
+  it('rejects a resize whose result would be out of bounds, and applyResize does not mutate state', () => {
+    useEditorStore.getState().newPattern('T', 1, 1);
+    const preview = useEditorStore.getState().previewResize({ top: -1, bottom: 0, left: 0, right: 0 });
+    expect(preview).toEqual({ ok: false, reason: 'out-of-bounds' });
+
+    const stackBefore = useEditorStore.getState().undoStack.length;
+    useEditorStore.getState().applyResize({ top: -1, bottom: 0, left: 0, right: 0 });
+
+    expect(useEditorStore.getState().pattern!.rows).toBe(1); // unchanged
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore);
+  });
+
+  it('accepts a resize landing exactly on the 1 and 500 bounds, in both directions', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+
+    const shrinkPreview = useEditorStore.getState().previewResize({ top: -4, bottom: 0, left: -4, right: 0 });
+    expect(shrinkPreview).toMatchObject({ ok: true, rows: 1, cols: 1 });
+    useEditorStore.getState().applyResize({ top: -4, bottom: 0, left: -4, right: 0 });
+    expect(useEditorStore.getState().pattern!.rows).toBe(1);
+    expect(useEditorStore.getState().pattern!.cols).toBe(1);
+
+    const growPreview = useEditorStore.getState().previewResize({ top: 499, bottom: 0, left: 499, right: 0 });
+    expect(growPreview).toMatchObject({ ok: true, rows: 500, cols: 500 });
+    useEditorStore.getState().applyResize({ top: 499, bottom: 0, left: 499, right: 0 });
+    expect(useEditorStore.getState().pattern!.rows).toBe(500);
+    expect(useEditorStore.getState().pattern!.cols).toBe(500);
+  });
+
+  it('applies a combined 4-edge resize as a single undo step that fully reverts rows/cols/grid content', () => {
+    useEditorStore.getState().newPattern('T', 4, 4);
+    setGrid([[1, 1, 6]]);
+    const gridBefore = useEditorStore.getState().pattern!.grid;
+    const stackBefore = useEditorStore.getState().undoStack.length;
+
+    useEditorStore.getState().applyResize({ top: 2, bottom: -1, left: 3, right: -2 });
+
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore + 1);
+    const resized = useEditorStore.getState().pattern!;
+    expect(resized.rows).toBe(5);
+    expect(resized.cols).toBe(5);
+
+    useEditorStore.getState().undo();
+
+    const reverted = useEditorStore.getState().pattern!;
+    expect(reverted.rows).toBe(4);
+    expect(reverted.cols).toBe(4);
+    expect(reverted.grid).toEqual(gridBefore);
+    expect(useEditorStore.getState().undoStack.length).toBe(stackBefore);
+
+    useEditorStore.getState().redo();
+    const redone = useEditorStore.getState().pattern!;
+    expect(redone.rows).toBe(5);
+    expect(redone.cols).toBe(5);
+  });
+
+  it('undo/redo of a resize command only ever touches pattern, never selection', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([[0, 0, 4]]);
+
+    useEditorStore.getState().beginMarqueeDrag(3, 3);
+    useEditorStore.getState().continueMarqueeDrag(4, 4);
+    useEditorStore.getState().endMarqueeDrag(); // leave a selection floating, uncommitted
+    const selectionBefore = useEditorStore.getState().selection;
+    expect(selectionBefore).not.toBeNull();
+
+    useEditorStore.getState().applyResize({ top: 0, bottom: 0, left: 0, right: -3 }); // shrinks past the selection's anchor
+    expect(useEditorStore.getState().selection).toEqual(selectionBefore); // resize itself never touches it
+
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().pattern!.cols).toBe(5);
+    expect(useEditorStore.getState().selection).toEqual(selectionBefore);
+
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().pattern!.cols).toBe(2);
+    expect(useEditorStore.getState().selection).toEqual(selectionBefore);
+  });
+
+  it('does not crash committing a floating selection left dangling out-of-bounds by a resize shrink', () => {
+    useEditorStore.getState().newPattern('T', 5, 5);
+    setGrid([[0, 0, 4]]);
+
+    useEditorStore.getState().beginMarqueeDrag(3, 3);
+    useEditorStore.getState().continueMarqueeDrag(4, 4);
+    useEditorStore.getState().endMarqueeDrag(); // 2x2 selection anchored at (3,3) in a 5x5 grid
+
+    useEditorStore.getState().applyResize({ top: 0, bottom: -3, left: 0, right: -3 }); // grid shrinks to 2x2
+
+    expect(() => useEditorStore.getState().commitSelection()).not.toThrow();
+    expect(useEditorStore.getState().selection).toBeNull();
+  });
+});
