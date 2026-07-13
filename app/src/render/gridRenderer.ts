@@ -3,19 +3,34 @@
 // container) and the paginated export/print pipeline (ticket 27), without
 // the two ever being able to visually drift apart.
 
-import { type Pattern, getSlot } from '../model/pattern';
-import { type Rect } from '../model/selection';
+import { type Cell, type Pattern, getSlot } from '../model/pattern';
+import { blockRect, type Rect } from '../model/selection';
 import { SYMBOLS } from '../model/symbols';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// ticket 31: the current floating selection (marquee-select or Select All
+// result), lifted out of `pattern.grid` into its own standalone block — see
+// `FloatingSelection` in editorStore.ts and `liftRect` in model/selection.ts.
+// `anchorRow`/`anchorCol` is the block's current top-left position in the
+// full grid, so the overlay can render it wherever it's been moved/rotated/
+// mirrored to.
+export interface FloatingSelectionBlock {
+  anchorRow: number;
+  anchorCol: number;
+  block: Cell[][];
+}
+
 export interface GridRenderOptions {
   cellSize: number;
-  // ticket 23: an in-progress marquee-drag preview rect and/or the current
-  // floating selection's bounds, both in grid (row/col) coordinates. Purely
-  // additive — omitting them renders exactly as before.
+  // ticket 23: an in-progress marquee-drag preview rect, in grid (row/col)
+  // coordinates. Purely additive — omitting it renders exactly as before.
   marqueeRect?: Rect | null;
-  selectionRect?: Rect | null;
+  // ticket 23/31: the current floating selection, if any. Its lifted cell
+  // contents (color + symbol) render inside the overlay — positioned at
+  // anchorRow/anchorCol — instead of a plain tint, so the selection never
+  // reads as "the colors vanished" (they're floating, not gone).
+  selection?: FloatingSelectionBlock | null;
   // ticket 27: the absolute row/col that local row/col 0 of `pattern` maps
   // to. Lets the export pipeline pass in a windowed sub-pattern (one page's
   // row/col slice) while still drawing column/row number labels — and their
@@ -116,13 +131,36 @@ export function buildGridSVG(pattern: Pattern, options: GridRenderOptions): SVGS
       buildOverlayRect(options.marqueeRect, cellSize, leftGutter, topGutter, 'marquee-overlay', MARQUEE_FILL, MARQUEE_STROKE, '4 2')
     );
   }
-  if (options.selectionRect) {
-    svg.appendChild(
-      buildOverlayRect(options.selectionRect, cellSize, leftGutter, topGutter, 'selection-overlay', SELECTION_FILL, SELECTION_STROKE)
-    );
+  if (options.selection) {
+    svg.appendChild(buildSelectionOverlay(options.selection, pattern, cellSize, leftGutter, topGutter));
   }
 
   return svg;
+}
+
+// Converts a Rect (grid row/col bounds, inclusive) to the pixel x/y/width/
+// height of the region it covers, given the shared cellSize/gutter geometry.
+// Centralized so every overlay that draws "a box over this Rect" (marquee
+// preview, selection tint, selection border) computes the same pixels.
+function rectPixels(
+  rect: Rect,
+  cellSize: number,
+  leftGutter: number,
+  topGutter: number
+): { x: number; y: number; width: number; height: number } {
+  return {
+    x: rect.c0 * cellSize + leftGutter,
+    y: rect.r0 * cellSize + topGutter,
+    width: (rect.c1 - rect.c0 + 1) * cellSize,
+    height: (rect.r1 - rect.r0 + 1) * cellSize,
+  };
+}
+
+function setRectPixels(rectEl: SVGRectElement, pixels: { x: number; y: number; width: number; height: number }): void {
+  rectEl.setAttribute('x', String(pixels.x));
+  rectEl.setAttribute('y', String(pixels.y));
+  rectEl.setAttribute('width', String(pixels.width));
+  rectEl.setAttribute('height', String(pixels.height));
 }
 
 // A semi-transparent rect over a rectangular region, for the in-progress
@@ -144,15 +182,81 @@ function buildOverlayRect(
   group.setAttribute('pointer-events', 'none');
 
   const rectEl = el('rect');
-  rectEl.setAttribute('x', String(rect.c0 * cellSize + leftGutter));
-  rectEl.setAttribute('y', String(rect.r0 * cellSize + topGutter));
-  rectEl.setAttribute('width', String((rect.c1 - rect.c0 + 1) * cellSize));
-  rectEl.setAttribute('height', String((rect.r1 - rect.r0 + 1) * cellSize));
+  setRectPixels(rectEl, rectPixels(rect, cellSize, leftGutter, topGutter));
   rectEl.setAttribute('fill', fill);
   rectEl.setAttribute('stroke', stroke);
   rectEl.setAttribute('stroke-width', '2');
   if (dash) rectEl.setAttribute('stroke-dasharray', dash);
   group.appendChild(rectEl);
+
+  return group;
+}
+
+/**
+ * The floating selection overlay (ticket 31): a background tint over the
+ * selection's full bounds (so blank cells inside the block still read as
+ * "selected"), the block's actual lifted cell contents (color + symbol,
+ * ticket 30) drawn on top at their current anchored position, and a border
+ * stroke on top of that to keep the selection outline crisp. `pointer-events:
+ * none` throughout so it never intercepts the `elementFromPoint` cell
+ * hit-testing PatternGrid relies on during drags.
+ */
+function buildSelectionOverlay(
+  selection: FloatingSelectionBlock,
+  pattern: Pattern,
+  cellSize: number,
+  leftGutter: number,
+  topGutter: number
+): SVGGElement {
+  const { anchorRow, anchorCol, block } = selection;
+  const rect = blockRect(anchorRow, anchorCol, block);
+  const pixels = rectPixels(rect, cellSize, leftGutter, topGutter);
+
+  const group = el('g');
+  group.setAttribute('data-role', 'selection-overlay');
+  group.setAttribute('pointer-events', 'none');
+
+  const tint = el('rect');
+  setRectPixels(tint, pixels);
+  tint.setAttribute('fill', SELECTION_FILL);
+  tint.setAttribute('data-role', 'selection-tint');
+  group.appendChild(tint);
+
+  for (let r = 0; r < block.length; r++) {
+    for (let c = 0; c < block[r].length; c++) {
+      const cellId = block[r][c];
+      if (cellId === null) continue; // blank within the block: tint shows through, no cell/glyph
+      const slot = getSlot(pattern, cellId);
+      if (!slot) continue;
+
+      const absRow = anchorRow + r;
+      const absCol = anchorCol + c;
+      const x = absCol * cellSize + leftGutter;
+      const y = absRow * cellSize + topGutter;
+
+      const cellRect = el('rect');
+      cellRect.setAttribute('x', String(x));
+      cellRect.setAttribute('y', String(y));
+      cellRect.setAttribute('width', String(cellSize));
+      cellRect.setAttribute('height', String(cellSize));
+      cellRect.setAttribute('fill', slot.hex);
+      cellRect.setAttribute('data-role', 'selection-cell');
+      cellRect.setAttribute('data-row', String(absRow));
+      cellRect.setAttribute('data-col', String(absCol));
+      group.appendChild(cellRect);
+
+      const glyph = buildCellSymbol(slot, x, y, cellSize, absRow, absCol);
+      if (glyph) group.appendChild(glyph);
+    }
+  }
+
+  const border = el('rect');
+  setRectPixels(border, pixels);
+  border.setAttribute('fill', 'none');
+  border.setAttribute('stroke', SELECTION_STROKE);
+  border.setAttribute('stroke-width', '2');
+  border.setAttribute('data-role', 'selection-border');
+  group.appendChild(border);
 
   return group;
 }

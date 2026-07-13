@@ -1,6 +1,6 @@
 import { type PointerEvent, useEffect, useRef } from 'react';
 import type { Pattern } from '../model/pattern';
-import { blockRect, isInsideBlock } from '../model/selection';
+import { isInsideBlock } from '../model/selection';
 import { buildGridSVG } from '../render/gridRenderer';
 import { useEditorStore } from '../store/editorStore';
 
@@ -40,8 +40,7 @@ export function PatternGrid({ pattern, cellSize = DEFAULT_CELL_SIZE }: PatternGr
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const selectionRect = selection ? blockRect(selection.anchorRow, selection.anchorCol, selection.block) : null;
-    const svg = buildGridSVG(pattern, { cellSize, marqueeRect, selectionRect });
+    const svg = buildGridSVG(pattern, { cellSize, marqueeRect, selection });
     container.replaceChildren(svg);
   }, [pattern, cellSize, marqueeRect, selection]);
 
