@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createPattern } from '../model/pattern';
 import { addSlot } from '../model/palette';
 import { SYMBOLS } from '../model/symbols';
-import { computeExportLayout } from './exportLayout';
+import { HEADER_BLOCK_MM, computeExportLayout } from './exportLayout';
 import { buildExportPageSVG, buildExportPages, slicePattern } from './exportRenderer';
 
 function patternWithPalette(rows: number, cols: number): ReturnType<typeof createPattern> {
@@ -124,6 +124,46 @@ describe('buildExportPageSVG', () => {
         expect(fill).not.toBe('black');
         expect(fill).not.toBe('#000000');
       });
+    });
+  });
+
+  it('omits the thumbnail entirely for a single-page export (no "you are here" to show, ticket 32)', () => {
+    const pattern = patternWithPalette(5, 5);
+    const range = { rowStart: 0, rowEnd: 4, colStart: 0, colEnd: 4 };
+
+    const svg = buildExportPageSVG(pattern, range, { cellSize: 10, pageIndex: 0, pageCount: 1 });
+
+    expect(svg.querySelector('[data-role="thumbnail"]')).toBeNull();
+    expect(svg.querySelector('[data-role="thumbnail-bounds"]')).toBeNull();
+    expect(svg.querySelector('[data-role="thumbnail-highlight"]')).toBeNull();
+  });
+
+  describe('thumbnail sizing stays inside the reserved header block (ticket 32)', () => {
+    // The thumbnail is drawn at a fixed x/y/size in the page's SVG user-unit
+    // (mm) coordinate space; the header block's own reserved height is
+    // HEADER_BLOCK_MM regardless of cellSize or pattern size, so the
+    // thumbnail's bottom edge (y + size) must never exceed HEADER_BLOCK_MM.
+    it.each([
+      { label: 'small pattern, default cell size', rows: 5, cols: 5, cellSize: 10 },
+      { label: 'large multi-page pattern, default cell size', rows: 200, cols: 200, cellSize: 10 },
+      { label: 'small pattern, large cell size preset', rows: 5, cols: 5, cellSize: 14 },
+      { label: 'large multi-page pattern, small cell size preset', rows: 200, cols: 200, cellSize: 6 },
+    ])('$label', ({ rows, cols, cellSize }) => {
+      const pattern = patternWithPalette(rows, cols);
+      // Force a multi-page result (pageCount > 1) so the thumbnail renders,
+      // regardless of whether this particular rows/cols actually spans
+      // multiple pages at this cellSize.
+      const range = { rowStart: 0, rowEnd: Math.min(4, rows - 1), colStart: 0, colEnd: Math.min(4, cols - 1) };
+
+      const svg = buildExportPageSVG(pattern, range, { cellSize, pageIndex: 0, pageCount: 2 });
+
+      const bounds = svg.querySelector('[data-role="thumbnail-bounds"]');
+      expect(bounds).not.toBeNull();
+      const y = Number(bounds?.getAttribute('y'));
+      const height = Number(bounds?.getAttribute('height'));
+
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y + height).toBeLessThanOrEqual(HEADER_BLOCK_MM);
     });
   });
 });

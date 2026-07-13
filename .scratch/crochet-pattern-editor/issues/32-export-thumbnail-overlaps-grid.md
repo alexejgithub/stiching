@@ -2,7 +2,7 @@
 
 **Reported by:** user bug report, 2026-07-13
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Symptom
 
@@ -26,6 +26,17 @@ Two independent things to correct:
 
 ## Acceptance criteria
 
-- [ ] Thumbnail is fully contained within the header block's reserved space at the default cell size, no overlap with the grid, at both a small and a large (multi-page) pattern
-- [ ] Single-page exports either omit the thumbnail or render it in a way that's clearly not confusable with a rendering glitch
-- [ ] Multi-page exports still show the highlighted "this page's region" thumbnail correctly positioned
+- [x] Thumbnail is fully contained within the header block's reserved space at the default cell size, no overlap with the grid, at both a small and a large (multi-page) pattern
+- [x] Single-page exports either omit the thumbnail or render it in a way that's clearly not confusable with a rendering glitch
+- [x] Multi-page exports still show the highlighted "this page's region" thumbnail correctly positioned
+
+## Comments
+
+Fixed in [app/](../../../app/) — `src/render/exportRenderer.ts`:
+
+1. **Sizing**: `THUMBNAIL_SIZE_FACTOR` (in `exportRenderer.ts`, not `exportLayout.ts`) changed from `8` (a `cellSize` multiplier, giving an 80mm box at the default 10mm cell size) to `0.6`, now a fraction of `HEADER_BLOCK_MM` (the fixed 22mm header budget) instead: `thumbnailSize = HEADER_BLOCK_MM * 0.6 = 13.2mm`. Since `cellSize` can vary per export (`ExportDialog.tsx` offers 6/10/14mm presets) while `HEADER_BLOCK_MM` does not, tying the thumbnail to the fixed-mm budget rather than to `cellSize` keeps it contained regardless of which preset the user picks. The thumbnail is vertically centered in the header block via `thumbnailMargin = (HEADER_BLOCK_MM - thumbnailSize) / 2 = 4.4mm`, placed at `y = thumbnailMargin`, so `y + thumbnailSize = 17.6mm <= 22mm` with margin to spare — well clear of the grid, which starts at `cellSize + HEADER_BLOCK_MM` (32mm at the default cell size).
+2. **Single-page omission**: checked ticket 16 first — it says every page carries a thumbnail, but also that a "single-page pattern exports as one plain SVG," and ticket 32's own acceptance criteria explicitly permit omission. Since a single page's range *is* the whole pattern, the highlight-vs-bounds distinction is meaningless there, so `buildExportPageSVG` now skips building/appending the thumbnail entirely when `pageCount > 1` is false, rather than rendering a contextless gray box. Multi-page exports are unaffected — the highlight thumbnail still renders, now correctly positioned/sized.
+
+Did not touch `buildHeader` (numbering, ticket 29), symbol glyph rendering (ticket 30), or selection rendering (ticket 31) — scoped strictly to `buildThumbnail`'s call site and the `THUMBNAIL_SIZE_FACTOR` constant.
+
+Verified via `npm run typecheck` (clean) and `npx vitest run src/render/exportRenderer.test.ts src/render/exportLayout.test.ts` (18 passed), including new tests: an `it.each` asserting the thumbnail's bounds (`y + height <= HEADER_BLOCK_MM`) across small/large patterns and small/large cell-size presets, and a test asserting `pageCount: 1` renders no `thumbnail`/`thumbnail-bounds`/`thumbnail-highlight` elements at all. Full suite (`npm test`) passes: 149/149. Reviewed via the `code-review` skill (Standards + Spec axes in parallel) — no blocking findings on either axis. Commit: `cbeedd0`.

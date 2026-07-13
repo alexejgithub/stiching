@@ -25,7 +25,16 @@ function el<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[
 // a color swatch + one glyph + a short label without crowding.
 const LEGEND_ITEM_WIDTH_FACTOR = 7;
 const LEGEND_ROW_HEIGHT_FACTOR = 1.6;
-const THUMBNAIL_SIZE_FACTOR = 8;
+
+// The thumbnail lives entirely inside the fixed-mm HEADER_BLOCK_MM reserved
+// above the grid (see exportLayout.ts), so — unlike the legend/header text —
+// its size must be a function of that fixed mm budget, not of cellSize:
+// cellSize can vary per export (see ExportDialog's presets) while
+// HEADER_BLOCK_MM does not, so a cellSize-scaled thumbnail could grow past
+// its reserved space (ticket 32). THUMBNAIL_SIZE_FACTOR is the fraction of
+// HEADER_BLOCK_MM used for the thumbnail's edge length; the rest is split
+// evenly above/below as margin so the thumbnail sits centered in the block.
+const THUMBNAIL_SIZE_FACTOR = 0.6;
 
 /**
  * Slices a Pattern's grid down to one page's absolute row/col range
@@ -198,8 +207,9 @@ export interface ExportPageOptions {
 /**
  * Builds one page's complete, self-contained export SVG: the windowed grid
  * slice (absolute-numbered), a "Page X of Y" + absolute row/col range
- * header, a whole-pattern thumbnail with this page's region highlighted, and
- * the full legend below the grid.
+ * header, a whole-pattern thumbnail with this page's region highlighted
+ * (multi-page exports only — see the pageCount check below), and the full
+ * legend below the grid.
  */
 export function buildExportPageSVG(pattern: Pattern, range: PageRange, options: ExportPageOptions): SVGSVGElement {
   const { cellSize, pageIndex, pageCount } = options;
@@ -214,7 +224,6 @@ export function buildExportPageSVG(pattern: Pattern, range: PageRange, options: 
   const gridHeight = Number(gridSvg.getAttribute('height'));
 
   const headerHeight = cellSize + HEADER_BLOCK_MM;
-  const thumbnailSize = cellSize * THUMBNAIL_SIZE_FACTOR;
   const legendH = legendHeight(pattern, cellSize, gridWidth);
 
   const totalWidth = gridWidth;
@@ -229,9 +238,24 @@ export function buildExportPageSVG(pattern: Pattern, range: PageRange, options: 
   svg.setAttribute('data-page-count', String(pageCount));
 
   svg.appendChild(buildHeader(range, pageIndex, pageCount, cellSize));
-  svg.appendChild(
-    buildThumbnail(pattern, range, totalWidth - thumbnailSize - cellSize * 0.5, cellSize * 0.3, thumbnailSize)
-  );
+
+  // A single-page export has no "you are here" question to answer — the
+  // one page's range is the whole pattern, so a highlight thumbnail would
+  // just show a highlight covering its own bounds. Skip it entirely rather
+  // than render context-free decoration (ticket 32).
+  if (pageCount > 1) {
+    const thumbnailSize = HEADER_BLOCK_MM * THUMBNAIL_SIZE_FACTOR;
+    const thumbnailMargin = (HEADER_BLOCK_MM - thumbnailSize) / 2;
+    svg.appendChild(
+      buildThumbnail(
+        pattern,
+        range,
+        totalWidth - thumbnailSize - cellSize * 0.5,
+        thumbnailMargin,
+        thumbnailSize
+      )
+    );
+  }
 
   gridSvg.setAttribute('x', '0');
   gridSvg.setAttribute('y', String(headerHeight));
