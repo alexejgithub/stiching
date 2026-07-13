@@ -1,29 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { createPattern, getSlot } from './pattern';
+import { type Pattern, createPattern, getSlot } from './pattern';
 import { addSlot, deleteSlot, overrideSlotSymbol, recolorSlot, renameSlot, reorderSlot } from './palette';
 import { SYMBOLS } from './symbols';
 
+// These tests exercise addSlot/deleteSlot/reorderSlot mechanics in isolation
+// from createPattern's starter-palette seed (ticket 33, covered separately in
+// pattern.test.ts), so they start from a pattern with a genuinely blank
+// palette rather than createPattern's real (now pre-seeded) output.
+function blank(rows: number, cols: number): Pattern {
+  const p = createPattern('T', rows, cols);
+  return { ...p, palette: [], nextSlotId: 1 };
+}
+
 describe('addSlot', () => {
   it('assigns the 1st slot ever minted the 1st symbol', () => {
-    const p = addSlot(createPattern('T', 1, 1), '#ff0000', 'Red');
+    const p = addSlot(blank(1, 1), '#ff0000', 'Red');
     expect(p.palette[0].symbolId).toBe(0);
     expect(p.nextSlotId).toBe(2);
   });
 
   it('assigns the 14th slot ever minted the last symbol in the sequence', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     for (let i = 0; i < 14; i++) p = addSlot(p, '#000000', `S${i}`);
     expect(p.palette[13].symbolId).toBe(SYMBOLS.length - 1);
   });
 
   it('cycles back to the start of the sequence past 14 slots', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     for (let i = 0; i < 15; i++) p = addSlot(p, '#000000', `S${i}`);
     expect(p.palette[14].symbolId).toBe(0);
   });
 
   it('bases assignment on total slots ever minted, not current palette length, after deletions', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#111111', 'a'); // 1st minted -> symbol 0
     p = addSlot(p, '#222222', 'b'); // 2nd minted -> symbol 1
     p = addSlot(p, '#333333', 'c'); // 3rd minted -> symbol 2
@@ -42,7 +51,7 @@ describe('addSlot', () => {
 
 describe('overrideSlotSymbol', () => {
   it('sets a slot symbol to an arbitrary index, allowing duplicates across slots', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#111111', 'a');
     p = addSlot(p, '#222222', 'b');
     const [a, b] = p.palette;
@@ -52,7 +61,7 @@ describe('overrideSlotSymbol', () => {
   });
 
   it('override survives palette reordering', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#111111', 'a');
     p = addSlot(p, '#222222', 'b');
     const aId = p.palette[0].id;
@@ -63,7 +72,7 @@ describe('overrideSlotSymbol', () => {
   });
 
   it('rejects an out-of-range symbol index', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#111111', 'a');
     expect(() => overrideSlotSymbol(p, p.palette[0].id, -1)).toThrow(RangeError);
     expect(() => overrideSlotSymbol(p, p.palette[0].id, SYMBOLS.length)).toThrow(RangeError);
@@ -72,7 +81,7 @@ describe('overrideSlotSymbol', () => {
 
 describe('renameSlot / recolorSlot', () => {
   it('propagates to a painted cell via a live getSlot lookup, not a copied value', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#ff0000', 'Red');
     const slotId = p.palette[0].id;
     p.grid[0][0] = slotId;
@@ -88,7 +97,7 @@ describe('renameSlot / recolorSlot', () => {
 
 describe('reorderSlot', () => {
   it('changes only palette order, never any cell reference', () => {
-    let p = createPattern('T', 1, 2);
+    let p = blank(1, 2);
     p = addSlot(p, '#111111', 'a');
     p = addSlot(p, '#222222', 'b');
     const [aId, bId] = p.palette.map((s) => s.id);
@@ -107,7 +116,7 @@ describe('reorderSlot', () => {
 
 describe('deleteSlot', () => {
   it('blocks deletion while a cell still references the slot, leaving state untouched', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#ff0000', 'Red');
     const slotId = p.palette[0].id;
     p.grid[0][0] = slotId;
@@ -123,7 +132,7 @@ describe('deleteSlot', () => {
   });
 
   it('clears referencing cells and deletes the slot when clearCells is true', () => {
-    let p = createPattern('T', 1, 2);
+    let p = blank(1, 2);
     p = addSlot(p, '#ff0000', 'Red');
     const slotId = p.palette[0].id;
     p.grid[0][0] = slotId;
@@ -138,7 +147,7 @@ describe('deleteSlot', () => {
   });
 
   it('succeeds immediately when the slot is unreferenced', () => {
-    let p = createPattern('T', 1, 1);
+    let p = blank(1, 1);
     p = addSlot(p, '#ff0000', 'Red');
     const slotId = p.palette[0].id;
 
