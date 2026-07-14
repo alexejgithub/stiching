@@ -17,7 +17,13 @@ import {
   stampBlock,
 } from '../model/selection';
 
-export type Tool = 'draw' | 'select';
+// 'pan' (ticket 38) trades drawing for the browser's native touch scroll:
+// PatternGrid's `tool !== 'draw' && tool !== 'select'` guard already no-ops
+// pointer-down for any non-drawing tool, and the grid only lifts its
+// `touch-action: none` (index.css) while this tool is active, so a pattern
+// larger than the viewport can be panned on touch without a dedicated
+// gesture handler or scroll-container split.
+export type Tool = 'draw' | 'select' | 'pan';
 
 // A rectangular block of cells lifted out of the grid and held in-session
 // (never persisted, never touched by undo/redo — see the `commitFloatingSelection`
