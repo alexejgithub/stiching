@@ -12,7 +12,7 @@ describe('buildGridSVG', () => {
 
   it('renders a cell-symbol glyph for every stitched cell, matching the slot symbol', () => {
     const pattern = createPattern('T', 2, 2);
-    pattern.palette.push({ id: 1, hex: '#ff0000', label: 'Red', symbolId: 2, yarnLink: null });
+    pattern.palette = [{ id: 1, hex: '#ff0000', label: 'Red', symbolId: 2, yarnLink: null }];
     pattern.grid[0][0] = 1;
     pattern.grid[1][1] = 1;
 
@@ -24,7 +24,7 @@ describe('buildGridSVG', () => {
 
   it('leaves blank cells glyph-free', () => {
     const pattern = createPattern('T', 2, 2);
-    pattern.palette.push({ id: 1, hex: '#ff0000', label: 'Red', symbolId: 0, yarnLink: null });
+    pattern.palette = [{ id: 1, hex: '#ff0000', label: 'Red', symbolId: 0, yarnLink: null }];
     pattern.grid[0][0] = 1;
     // grid[0][1], grid[1][0], grid[1][1] stay null (blank).
 
@@ -34,10 +34,10 @@ describe('buildGridSVG', () => {
 
   it('picks a light glyph color for dark fills and a dark glyph color for light fills', () => {
     const pattern = createPattern('T', 1, 2);
-    pattern.palette.push(
+    pattern.palette = [
       { id: 1, hex: '#000000', label: 'Black', symbolId: 0, yarnLink: null },
-      { id: 2, hex: '#ffff00', label: 'Yellow', symbolId: 1, yarnLink: null }
-    );
+      { id: 2, hex: '#ffff00', label: 'Yellow', symbolId: 1, yarnLink: null },
+    ];
     pattern.grid[0][0] = 1;
     pattern.grid[0][1] = 2;
 
@@ -140,10 +140,10 @@ describe('buildGridSVG', () => {
   describe('selection overlay (ticket 31)', () => {
     function patternWithLiftedSelection() {
       const pattern = createPattern('T', 3, 3);
-      pattern.palette.push(
+      pattern.palette = [
         { id: 1, hex: '#ff0000', label: 'Red', symbolId: 0, yarnLink: null },
-        { id: 2, hex: '#00ff00', label: 'Green', symbolId: 1, yarnLink: null }
-      );
+        { id: 2, hex: '#00ff00', label: 'Green', symbolId: 1, yarnLink: null },
+      ];
       // Grid itself has nothing at the selection's original site — mirrors
       // liftRect having already blanked it out.
       return pattern;
