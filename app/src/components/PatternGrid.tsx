@@ -49,6 +49,16 @@ export function PatternGrid({ pattern, cellSize = DEFAULT_CELL_SIZE }: PatternGr
     if (tool !== 'draw' && tool !== 'select') return;
     const cell = cellAtPoint(e.clientX, e.clientY);
     if (!cell) return;
+    // A paint stroke / marquee-select / selection-move drag is a mouse-down-
+    // and-drag motion — also the browser's native text-selection gesture.
+    // Stop it starting at the source (ticket 34) for every drag that begins
+    // on a cell. This container is a plain, non-focusable div, so
+    // suppressing the default doesn't block pointer capture, click, or focus
+    // behavior elsewhere. A pointer-down that lands directly on a gutter
+    // number instead of a cell skips this (cell is null, see the guard
+    // above) — the `user-select: none` on `.pattern-grid` (index.css) is
+    // what covers that case.
+    e.preventDefault();
     // Capture on the (stable) container, not the SVG rect: the rect itself
     // gets torn down and rebuilt by the effect above on every painted cell,
     // which would silently drop capture set on it. Capturing here also means
