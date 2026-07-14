@@ -4,7 +4,7 @@
 
 Type: prototype
 Blocked by: None
-Status: ready-for-agent
+Status: resolved
 
 ## Question
 
@@ -23,5 +23,15 @@ Proposed 3 directions (starting point — the prototype can adjust these, but th
 - [ ] All 3 directions are built as static or lightly-interactive mockups covering the same screens, viewable side by side
 - [ ] Each direction is applied consistently (not just the grid — toolbar, palette editor, and at least one dialog too)
 - [ ] Presented to the user for a live decision (per the `/prototype` skill's HITL-check pattern used in [ticket 18](18-editor-prototype.md))
-- [ ] The chosen direction (or hybrid) is recorded under an `## Answer` heading on this ticket, with a pointer to the prototype artifact/commit
-- [ ] A follow-up implementation ticket is filed to actually apply the chosen style to the real app (this ticket itself stays throwaway, per prototype convention)
+- [x] The chosen direction (or hybrid) is recorded under an `## Answer` heading on this ticket, with a pointer to the prototype artifact/commit
+- [x] A follow-up implementation ticket is filed to actually apply the chosen style to the real app (this ticket itself stays throwaway, per prototype convention)
+
+## Answer
+
+Built as a throwaway `?variant=A|B|C` CSS-only prototype layered over the existing app shell (per the `/prototype` skill's sub-shape A — same route, same components, only the rendering swaps), covering the toolbar, palette editor, live grid, and the Export/Print dialog (all three dialogs share the same `.dialog`/`.dialog-backdrop` classes, so New Pattern and Resize picked up the same treatment for free). A floating bottom-bar (`PrototypeStyleSwitcher`) let the user cycle A/B/C live via `?variant=` or arrow keys.
+
+Unlike the skill's usual "variants must differ structurally" guidance, all three variants intentionally share the exact same DOM — the question here was specifically about *visual style* (color, shape, materiality, type), not layout, so a shared-structure/swapped-theme approach was the better fit and still produced three meaningfully distinct directions (pill/circular warm chrome vs. sharp brutalist mono vs. tightened neutral baseline).
+
+**Chosen: Direction A — Refined Neutral**, picked live by the user after viewing all three side by side in the running app (whites/grays, single deep-violet accent, tight density, subtle shadows/radius — a polish pass on the existing baseline rather than a departure from it).
+
+Full prototype (all 3 directions + switcher) captured on local throwaway branch `prototype/ticket-35-visual-style` (commit `c6d07ab`, not pushed) — built via `git worktree` so it never touched the main tree's in-progress work. Run it with `git checkout prototype/ticket-35-visual-style && npm run dev --prefix app`, then visit `/?variant=A` (or B/C), or use the floating switcher's arrows. Not merged to main; this ticket and that branch stay the throwaway record. Follow-up: [40 — Apply the Refined Neutral visual style to the real app](40-apply-refined-neutral-style.md).
