@@ -2,7 +2,7 @@
 
 **Reported by:** user bug report, 2026-07-13
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Symptom
 
@@ -23,6 +23,10 @@ Add `user-select: none` (and `-webkit-user-select: none` for Safari) to `.patter
 
 ## Acceptance criteria
 
-- [ ] Click-dragging a paint stroke across the grid (including drags that cross over the row/column number gutters) never highlights/selects any text
-- [ ] Marquee-select and selection-move drags are equally unaffected (same pointer-down path, same fix)
-- [ ] Normal text selection elsewhere in the app (palette labels, dialogs, etc.) is untouched — the `user-select: none` is scoped to `.pattern-grid` only
+- [x] Click-dragging a paint stroke across the grid (including drags that cross over the row/column number gutters) never highlights/selects any text
+- [x] Marquee-select and selection-move drags are equally unaffected (same pointer-down path, same fix)
+- [x] Normal text selection elsewhere in the app (palette labels, dialogs, etc.) is untouched — the `user-select: none` is scoped to `.pattern-grid` only
+
+## Comments
+
+Fixed with both `e.preventDefault()` in `handlePointerDown` (draw/select branches, PatternGrid.tsx) and `user-select: none` / `-webkit-user-select: none` scoped to `.pattern-grid` (index.css), per the "prefer both" recommendation. Added `PatternGrid.test.tsx` covering paint/marquee/move-drag branches and the non-drag-tool no-op case. Verified manually in the running app: a drag starting in a cell and crossing the column-number gutter produces no `window.getSelection()` text and no visible highlight. Full suite (168 tests) and typecheck pass.

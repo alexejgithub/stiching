@@ -50,6 +50,13 @@ button {
   /* Drag-to-paint dispatches its own pointer events; don't let the browser
      hijack the gesture for page scroll/zoom (touch/stylus parity). */
   touch-action: none;
+  /* A paint stroke / marquee-select / selection-move drag is a mouse-down-
+     and-drag motion — also the browser's native "select this text" gesture.
+     Without this, dragging over the row/column number <text> nodes
+     (gridRenderer.ts) highlights them as text (ticket 34). Scoped to this
+     class only so palette labels/dialogs elsewhere stay selectable. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Ticket 29: gridRenderer.ts/exportRenderer.ts bake a fixed dark `fill`
