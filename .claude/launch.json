@@ -5,7 +5,8 @@
       "name": "crochet-app",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     },
     {
       "name": "crochet-prototype-editor",

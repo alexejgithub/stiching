@@ -132,6 +132,23 @@ export default function App() {
     }
   }
 
+  function handleCreatePattern(name: string, rows: number, cols: number) {
+    newPattern(name, rows, cols);
+    setDialogOpen(false);
+    const created = useEditorStore.getState().pattern;
+    if (created) void savePattern(created);
+  }
+
+  // Reopening from the editor discards the in-progress pattern (anything not
+  // yet exported to a .crochet file is only reachable by reloading before the
+  // next autosave overwrites the single IndexedDB slot), so confirm first —
+  // unlike the landing screen, where there's nothing to lose yet.
+  function handleRestartClick() {
+    if (window.confirm('Start a new pattern? This will replace the current pattern.')) {
+      setDialogOpen(true);
+    }
+  }
+
   if (loading) {
     return null;
   }
@@ -142,17 +159,7 @@ export default function App() {
         <h1>Crochet Pattern Editor</h1>
         <button onClick={() => setDialogOpen(true)}>New Pattern</button>
         <ImportControl onFile={(file) => void handleImportFile(file)} error={importError} />
-        {dialogOpen && (
-          <NewPatternDialog
-            onCreate={(name, rows, cols) => {
-              newPattern(name, rows, cols);
-              setDialogOpen(false);
-              const created = useEditorStore.getState().pattern;
-              if (created) void savePattern(created);
-            }}
-            onCancel={() => setDialogOpen(false)}
-          />
-        )}
+        {dialogOpen && <NewPatternDialog onCreate={handleCreatePattern} onCancel={() => setDialogOpen(false)} />}
       </main>
     );
   }
@@ -161,6 +168,9 @@ export default function App() {
     <div className="editor">
       <header className="editor-header">
         <h1>{pattern.name}</h1>
+        <button type="button" onClick={handleRestartClick}>
+          New Pattern
+        </button>
         <button type="button" onClick={() => setResizeDialogOpen(true)}>
           Resize
         </button>
@@ -179,6 +189,7 @@ export default function App() {
       </div>
       {resizeDialogOpen && <ResizeDialog onClose={() => setResizeDialogOpen(false)} />}
       {exportDialogOpen && <ExportDialog pattern={pattern} onClose={() => setExportDialogOpen(false)} />}
+      {dialogOpen && <NewPatternDialog onCreate={handleCreatePattern} onCancel={() => setDialogOpen(false)} />}
     </div>
   );
 }
