@@ -121,6 +121,117 @@ button:hover:not(:disabled) {
   width: min(600px, 100%);
 }
 
+.import-image-dialog {
+  width: min(560px, 100%);
+}
+
+.import-grid-fields {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.import-grid-fields label {
+  flex: 1;
+}
+
+/* The crop stage's displayed size is set inline per-instance (ImportImageDialog.tsx)
+   to match the photo's own aspect ratio; this just establishes the
+   positioning context for the absolutely-positioned image and crop box. */
+.crop-stage {
+  position: relative;
+  margin: 0 auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.crop-stage-image-slot {
+  position: absolute;
+  inset: 0;
+}
+
+.crop-stage-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.crop-box {
+  position: absolute;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.35);
+  cursor: move;
+  /* This is its own pointer-driven drag surface (CropBox.tsx), not the
+     app's paint/select grid - touch-action:none + user-select:none give
+     stylus full parity and stop bare-finger touch from scrolling the page
+     mid-drag (same recipe as .pattern-grid, ticket 38). */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  touch-action: none;
+}
+
+.crop-handle-nw {
+  left: -0.5rem;
+  top: -0.5rem;
+  cursor: nwse-resize;
+}
+
+.crop-handle-ne {
+  right: -0.5rem;
+  top: -0.5rem;
+  cursor: nesw-resize;
+}
+
+.crop-handle-sw {
+  left: -0.5rem;
+  bottom: -0.5rem;
+  cursor: nesw-resize;
+}
+
+.crop-handle-se {
+  right: -0.5rem;
+  bottom: -0.5rem;
+  cursor: nwse-resize;
+}
+
+.import-preview-canvas {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  image-rendering: pixelated;
+}
+
+.import-image-dialog input[type='range'] {
+  width: 100%;
+}
+
+.import-palette-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.import-palette-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
 .dialog h2 {
   margin: 0 0 0.25rem;
 }
