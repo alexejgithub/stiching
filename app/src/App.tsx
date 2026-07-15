@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ExportDialog } from './components/ExportDialog';
+import { ImportImageControl } from './components/ImportImageControl';
 import { NewPatternDialog } from './components/NewPatternDialog';
 import { PaletteEditor } from './components/PaletteEditor';
 import { PatternGrid } from './components/PatternGrid';
 import { ResizeDialog } from './components/ResizeDialog';
 import { Toolbar } from './components/Toolbar';
+import type { Pattern } from './model/pattern';
 import { startAutosave } from './persistence/autosave';
 import { loadPattern, savePattern } from './persistence/db';
 import { exportPattern, importPattern } from './persistence/file';
@@ -139,6 +141,13 @@ export default function App() {
     if (created) void savePattern(created);
   }
 
+  // Same immediate-save-not-waiting-for-debounce path as New Pattern and
+  // .crochet import (see the comment above handleImportFile).
+  function handleCreateFromImage(imported: Pattern) {
+    useEditorStore.getState().replacePattern(imported);
+    void savePattern(imported);
+  }
+
   // Reopening from the editor discards the in-progress pattern (anything not
   // yet exported to a .crochet file is only reachable by reloading before the
   // next autosave overwrites the single IndexedDB slot), so confirm first —
@@ -158,6 +167,7 @@ export default function App() {
       <main className="landing">
         <h1>Crochet Pattern Editor</h1>
         <button onClick={() => setDialogOpen(true)}>New Pattern</button>
+        <ImportImageControl onCreate={handleCreateFromImage} />
         <ImportControl onFile={(file) => void handleImportFile(file)} error={importError} />
         {dialogOpen && <NewPatternDialog onCreate={handleCreatePattern} onCancel={() => setDialogOpen(false)} />}
       </main>
@@ -177,6 +187,7 @@ export default function App() {
         <button type="button" onClick={() => exportPattern(pattern)}>
           Export
         </button>
+        <ImportImageControl onCreate={handleCreateFromImage} />
         <ImportControl onFile={(file) => void handleImportFile(file)} error={importError} />
         <button type="button" onClick={() => setExportDialogOpen(true)}>
           Export / Print (SVG)

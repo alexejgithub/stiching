@@ -50,11 +50,11 @@ export function isValidDimension(n: number): boolean {
   return Number.isInteger(n) && n >= MIN_DIMENSION && n <= MAX_DIMENSION;
 }
 
-export function createPattern(name: string, rows: number, cols: number): Pattern {
-  if (!isValidDimension(rows) || !isValidDimension(cols)) {
-    throw new RangeError(`rows and cols must be integers between ${MIN_DIMENSION} and ${MAX_DIMENSION}`);
-  }
-  const blank: Pattern = {
+// A blank, palette-less Pattern at the given size. Shared by createPattern
+// (which seeds the starter palette on top) and createPatternFromImport in
+// importPattern.ts (which seeds the photo's extracted colors instead).
+export function blankPattern(name: string, rows: number, cols: number): Pattern {
+  return {
     schemaVersion: 1,
     id: crypto.randomUUID(),
     name,
@@ -64,10 +64,16 @@ export function createPattern(name: string, rows: number, cols: number): Pattern
     palette: [],
     nextSlotId: 1,
   };
+}
+
+export function createPattern(name: string, rows: number, cols: number): Pattern {
+  if (!isValidDimension(rows) || !isValidDimension(cols)) {
+    throw new RangeError(`rows and cols must be integers between ${MIN_DIMENSION} and ${MAX_DIMENSION}`);
+  }
   // Minted through the same addSlot used by the manual "add color" flow, so
   // seeded slots get identical id/symbol assignment and are indistinguishable
   // from a hand-added slot (per ticket 33's scope).
-  return STARTER_PALETTE_SEED.reduce((pattern, seed) => addSlot(pattern, seed.hex, seed.label), blank);
+  return STARTER_PALETTE_SEED.reduce((pattern, seed) => addSlot(pattern, seed.hex, seed.label), blankPattern(name, rows, cols));
 }
 
 export function getSlot(pattern: Pattern, id: SlotId | null): Slot | undefined {
