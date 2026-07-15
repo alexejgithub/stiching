@@ -157,7 +157,11 @@ button:hover:not(:disabled) {
 
 .pattern-grid {
   /* Drag-to-paint dispatches its own pointer events; don't let the browser
-     hijack the gesture for page scroll/zoom (touch/stylus parity). */
+     hijack the gesture for page scroll/zoom (touch/stylus parity) while a
+     drawing tool is active. Ticket 38: a pattern bigger than the viewport
+     has no other way to scroll on touch, since this same gesture is claimed
+     by paint/select/move — so `touch-action` is only suppressed for the
+     draw/select tools below, not unconditionally. */
   touch-action: none;
   /* A paint stroke / marquee-select / selection-move drag is a mouse-down-
      and-drag motion — also the browser's native "select this text" gesture.
@@ -166,6 +170,17 @@ button:hover:not(:disabled) {
      class only so palette labels/dialogs elsewhere stay selectable. */
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Ticket 38: Pan is the toolbar's escape hatch for scrolling a pattern
+   larger than the viewport. Pointer handlers already no-op for any tool
+   other than draw/select (PatternGrid.tsx), so restoring the default
+   touch-action here hands single- and two-finger touch gestures back to the
+   browser's native scroll/pinch-zoom instead of routing them through the
+   grid's drag handling. */
+.pattern-grid[data-tool='pan'] {
+  touch-action: auto;
+  cursor: grab;
 }
 
 /* Ticket 29: gridRenderer.ts/exportRenderer.ts bake a fixed dark `fill`

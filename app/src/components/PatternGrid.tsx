@@ -36,6 +36,10 @@ export function PatternGrid({ pattern, cellSize = DEFAULT_CELL_SIZE }: PatternGr
   // `pattern` itself doesn't change until the selection is lifted/committed.
   const marqueeRect = useEditorStore((s) => s.marqueeRect);
   const selection = useEditorStore((s) => s.selection);
+  // Drives the `data-tool` attribute below (index.css keys `touch-action`
+  // off it, ticket 38) — subscribed rather than read via getState() so the
+  // grid re-renders and lifts touch-action:none the moment Pan is selected.
+  const tool = useEditorStore((s) => s.tool);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -114,6 +118,7 @@ export function PatternGrid({ pattern, cellSize = DEFAULT_CELL_SIZE }: PatternGr
   return (
     <div
       className="pattern-grid"
+      data-tool={tool}
       ref={containerRef}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

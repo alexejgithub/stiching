@@ -36,6 +36,18 @@ export function Toolbar() {
       >
         Select
       </button>
+      {/* Ticket 38: lets touch scroll a pattern larger than the viewport —
+          drag-to-paint/select/move all claim the same single-finger drag
+          gesture the browser would otherwise use to pan, so panning needs an
+          explicit mode rather than a gesture that could collide with them. */}
+      <button
+        type="button"
+        aria-pressed={tool === 'pan'}
+        aria-label="Pan tool"
+        onClick={() => setTool(tool === 'pan' ? 'draw' : 'pan')}
+      >
+        Pan
+      </button>
       <button type="button" disabled={tool !== 'select'} onClick={selectAll} aria-label="Select all">
         Select All
       </button>

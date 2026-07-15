@@ -85,17 +85,24 @@ describe('PatternGrid handlePointerDown', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it('does not prevent the default gesture for tools other than draw/select', () => {
+  it('does not prevent the default gesture for the pan tool (ticket 38)', () => {
     const { container } = render(<PatternGrid pattern={useEditorStore.getState().pattern!} />);
     const cellEl = container.querySelector('[data-role="cell"][data-row="0"][data-col="0"]')!;
 
-    // `Tool` is currently only 'draw' | 'select', but the early-return guard
-    // (`tool !== 'draw' && tool !== 'select'`) is defense-in-depth for any
-    // future tool that shouldn't start a drag — it must leave the native
-    // text-selection gesture alone rather than preventDefault unconditionally.
-    useEditorStore.setState({ tool: 'pan' as unknown as 'draw' | 'select', selection: null });
+    // The early-return guard (`tool !== 'draw' && tool !== 'select'`) must
+    // leave the native touch-scroll/text-selection gesture alone for Pan
+    // rather than preventDefault unconditionally, or switching to Pan
+    // wouldn't actually restore native scrolling.
+    useEditorStore.setState({ tool: 'pan', selection: null });
     const event = firePointerDown(container.firstElementChild as HTMLElement, cellEl);
 
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('sets data-tool to the active tool so CSS can key touch-action off it', () => {
+    useEditorStore.setState({ tool: 'pan' });
+    const { container } = render(<PatternGrid pattern={useEditorStore.getState().pattern!} />);
+
+    expect(container.firstElementChild).toHaveAttribute('data-tool', 'pan');
   });
 });
