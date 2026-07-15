@@ -28,6 +28,79 @@ export const PAGE_MARGIN_MM = 10;
 // Y" + absolute row/col range header text and the whole-pattern thumbnail.
 export const HEADER_BLOCK_MM = 22;
 
+// Legend item width and row height, both relative to the legend's own cell
+// size, chosen to fit a color swatch + one glyph + a short label without
+// crowding. Pure sizing math, shared by the paginated export (exportRenderer.ts,
+// legend drawn at the grid's own cellSize) and the single-page overview
+// (overviewRenderer.ts, legend drawn at a fixed size independent of the
+// grid's shrink-to-fit cellSize).
+export const LEGEND_ITEM_WIDTH_FACTOR = 7;
+export const LEGEND_ROW_HEIGHT_FACTOR = 1.6;
+
+export function legendItemsPerRow(cellSize: number, availableWidth: number): number {
+  return Math.max(1, Math.floor(availableWidth / (cellSize * LEGEND_ITEM_WIDTH_FACTOR)));
+}
+
+export function legendHeight(pattern: Pattern, cellSize: number, availableWidth: number): number {
+  if (pattern.palette.length === 0) return 0;
+  const itemsPerRow = legendItemsPerRow(cellSize, availableWidth);
+  const rows = Math.ceil(pattern.palette.length / itemsPerRow);
+  return rows * cellSize * LEGEND_ROW_HEIGHT_FACTOR;
+}
+
+// Fixed legend cell size for the single-page overview (ticket 41): the grid
+// shrinks to whatever's needed to fit one page, but the legend must stay
+// readable regardless, so it's sized independently rather than scaling with
+// the grid's cellSize.
+export const OVERVIEW_LEGEND_CELL_SIZE_MM = 6;
+
+// Vertical space reserved above the grid for the overview's title line.
+export const OVERVIEW_HEADER_MM = 10;
+
+// Smallest cell size computeOverviewLayout will ever return, so a pattern
+// large enough (or a legend tall enough) to leave near-zero vertical room
+// still produces a strictly positive, renderable grid rather than a
+// degenerate zero/negative size.
+const OVERVIEW_MIN_CELL_SIZE_MM = 0.01;
+
+export interface OverviewLayout {
+  cellSize: number; // uniform grid cell size, mm — square cells
+  gridX: number; // grid's left edge, relative to the page margin
+  gridY: number; // grid's top edge, relative to the page margin
+  gridWidth: number;
+  gridHeight: number;
+  legendY: number; // legend's top edge, relative to the page margin
+}
+
+/**
+ * Computes the layout for ticket 41's single-page overview: the whole
+ * pattern always fits on one page, scaled uniformly (square cells, from
+ * whichever axis is more constrained) and centered, with the full legend
+ * below at a fixed, grid-independent size.
+ */
+export function computeOverviewLayout(
+  pattern: Pattern,
+  pageSizeMm: PageSizeMm = A4_PORTRAIT_MM,
+  legendCellSizeMm: number = OVERVIEW_LEGEND_CELL_SIZE_MM
+): OverviewLayout {
+  const availableWidth = pageSizeMm.width - 2 * PAGE_MARGIN_MM;
+  const legendH = legendHeight(pattern, legendCellSizeMm, availableWidth);
+  const availableHeight = pageSizeMm.height - 2 * PAGE_MARGIN_MM - OVERVIEW_HEADER_MM - legendH;
+
+  const cellSize = Math.max(
+    OVERVIEW_MIN_CELL_SIZE_MM,
+    Math.min(availableWidth / pattern.cols, availableHeight / pattern.rows)
+  );
+
+  const gridWidth = cellSize * pattern.cols;
+  const gridHeight = cellSize * pattern.rows;
+  const gridX = (availableWidth - gridWidth) / 2;
+  const gridY = OVERVIEW_HEADER_MM;
+  const legendY = gridY + gridHeight + legendCellSizeMm * 0.5;
+
+  return { cellSize, gridX, gridY, gridWidth, gridHeight, legendY };
+}
+
 export interface PageRange {
   // Inclusive, 0-indexed row/col range into the full Pattern's grid.
   rowStart: number;

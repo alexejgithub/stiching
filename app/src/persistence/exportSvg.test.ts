@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { addSlot } from '../model/palette';
 import { createPattern } from '../model/pattern';
-import { exportPageFileName, exportPatternAsSVG } from './exportSvg';
+import {
+  exportOverviewFileName,
+  exportPageFileName,
+  exportPatternAsSVG,
+  exportPatternOverviewAsSVG,
+} from './exportSvg';
 
 // Same Blob/object-URL/<a download> interception technique as
 // file.test.ts's captureDownload, applied here to the SVG export pipeline.
@@ -85,5 +90,37 @@ describe('exportPatternAsSVG', () => {
       expect(text).toContain('data-role="legend-item"');
       expect(text).toContain('data-role="page-header-title"');
     }
+  });
+});
+
+describe('exportOverviewFileName', () => {
+  it('suffixes the pattern name with "-overview", distinct from the paginated file names', () => {
+    const pattern = createPattern('My Blanket', 5, 5);
+    expect(exportOverviewFileName(pattern)).toBe('My Blanket-overview.svg');
+  });
+});
+
+describe('exportPatternOverviewAsSVG', () => {
+  it('downloads exactly one self-contained overview SVG, regardless of pattern size', () => {
+    const pattern = patternWithPalette(200, 200);
+    const clicks = captureDownloads();
+
+    exportPatternOverviewAsSVG(pattern);
+
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].name).toBe('My Blanket-overview.svg');
+  });
+
+  it('produces a valid overview SVG document distinct from the paginated export', async () => {
+    const pattern = patternWithPalette(5, 5);
+    const clicks = captureDownloads();
+
+    exportPatternOverviewAsSVG(pattern);
+
+    const text = await clicks[0].blob.text();
+    expect(text).toContain('<svg');
+    expect(text).toContain('data-role="overview-page"');
+    expect(text).toContain('data-role="legend-item"');
+    expect(text).not.toContain('data-role="page-header-title"');
   });
 });

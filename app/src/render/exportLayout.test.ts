@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { addSlot } from '../model/palette';
 import { createPattern } from '../model/pattern';
-import { A4_PORTRAIT_MM, HEADER_BLOCK_MM, PAGE_MARGIN_MM, computeExportLayout } from './exportLayout';
+import {
+  A4_PORTRAIT_MM,
+  HEADER_BLOCK_MM,
+  PAGE_MARGIN_MM,
+  computeExportLayout,
+  computeOverviewLayout,
+} from './exportLayout';
 
 // At cellSize 10mm on A4 portrait (210 x 297mm), the usable column capacity
 // works out to: (210 - 2*10 - 2*10) / 10 = 17 columns, and the usable row
@@ -105,5 +112,61 @@ describe('computeExportLayout', () => {
     const pattern = createPattern('Tiny', 1, 1);
     const layout = computeExportLayout(pattern, CELL_SIZE_MM);
     expect(layout.pages).toEqual([{ rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 }]);
+  });
+});
+
+describe('computeOverviewLayout (ticket 41)', () => {
+  function patternWithPalette(rows: number, cols: number) {
+    let p = createPattern('T', rows, cols);
+    p = addSlot(p, '#ff0000', 'Red');
+    p = addSlot(p, '#00ff00', 'Green');
+    return p;
+  }
+
+  it('keeps cells square: the computed cellSize times rows/cols never exceeds the available page area', () => {
+    const pattern = patternWithPalette(300, 20); // tall and narrow: rows is the constrained axis
+    const layout = computeOverviewLayout(pattern, A4_PORTRAIT_MM);
+
+    expect(layout.gridWidth).toBeCloseTo(layout.cellSize * pattern.cols);
+    expect(layout.gridHeight).toBeCloseTo(layout.cellSize * pattern.rows);
+
+    const availableWidth = A4_PORTRAIT_MM.width - 2 * PAGE_MARGIN_MM;
+    expect(layout.gridWidth).toBeLessThanOrEqual(availableWidth + 1e-6);
+  });
+
+  it('uses the wide axis to constrain scale for a wide, short pattern', () => {
+    const pattern = patternWithPalette(10, 300);
+    const layout = computeOverviewLayout(pattern, A4_PORTRAIT_MM);
+
+    const availableWidth = A4_PORTRAIT_MM.width - 2 * PAGE_MARGIN_MM;
+    // Cols is the constrained axis, so the grid should span (approximately)
+    // the full available width.
+    expect(layout.gridWidth).toBeCloseTo(availableWidth, 1);
+  });
+
+  it('centers the grid horizontally: leftover width is split evenly on both sides', () => {
+    const pattern = patternWithPalette(50, 5); // rows-constrained, leaving horizontal slack
+    const layout = computeOverviewLayout(pattern, A4_PORTRAIT_MM);
+
+    const availableWidth = A4_PORTRAIT_MM.width - 2 * PAGE_MARGIN_MM;
+    const rightSlack = availableWidth - layout.gridX - layout.gridWidth;
+    expect(layout.gridX).toBeCloseTo(rightSlack, 5);
+  });
+
+  it('always fits within one page: grid + legend never exceed the page height', () => {
+    const pattern = patternWithPalette(500, 500);
+    const layout = computeOverviewLayout(pattern, A4_PORTRAIT_MM);
+
+    expect(layout.gridY + layout.gridHeight).toBeLessThanOrEqual(A4_PORTRAIT_MM.height);
+    expect(layout.cellSize).toBeGreaterThan(0);
+  });
+
+  it('produces a strictly positive cellSize even for a very large pattern with a tall legend', () => {
+    let pattern = createPattern('Big Palette', 500, 500);
+    for (let i = 0; i < 40; i++) {
+      pattern = addSlot(pattern, `#${(i * 37 + 100000).toString(16).padStart(6, '0').slice(-6)}`, `Color ${i}`);
+    }
+    const layout = computeOverviewLayout(pattern, A4_PORTRAIT_MM);
+    expect(layout.cellSize).toBeGreaterThan(0);
   });
 });

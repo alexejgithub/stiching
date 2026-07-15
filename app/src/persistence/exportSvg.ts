@@ -6,6 +6,7 @@
 import { type Pattern } from '../model/pattern';
 import { A4_PORTRAIT_MM, DEFAULT_CELL_SIZE_MM, type PageSizeMm } from '../render/exportLayout';
 import { buildExportPages } from '../render/exportRenderer';
+import { buildOverviewSVG } from '../render/overviewRenderer';
 import { sanitizeFileName } from './file';
 
 function serializeSVG(svg: SVGSVGElement): string {
@@ -51,4 +52,21 @@ export function exportPatternAsSVG(
   pages.forEach((svg, i) => {
     downloadSVG(svg, exportPageFileName(pattern, i, pages.length));
   });
+}
+
+export function exportOverviewFileName(pattern: Pattern): string {
+  return `${sanitizeFileName(pattern.name)}-overview.svg`;
+}
+
+/**
+ * Downloads ticket 41's single-page overview: one self-contained SVG file,
+ * always exactly one page, distinct from the (possibly multi-file)
+ * to-scale paginated export above.
+ */
+export function exportPatternOverviewAsSVG(
+  pattern: Pattern,
+  pageSizeMm: PageSizeMm = A4_PORTRAIT_MM
+): void {
+  const svg = buildOverviewSVG(pattern, pageSizeMm);
+  downloadSVG(svg, exportOverviewFileName(pattern));
 }

@@ -12,7 +12,11 @@ import {
   HEADER_BLOCK_MM,
   type PageRange,
   type PageSizeMm,
+  LEGEND_ITEM_WIDTH_FACTOR,
+  LEGEND_ROW_HEIGHT_FACTOR,
   computeExportLayout,
+  legendHeight,
+  legendItemsPerRow,
 } from './exportLayout';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -20,11 +24,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 function el<K extends keyof SVGElementTagNameMap>(tag: K): SVGElementTagNameMap[K] {
   return document.createElementNS(SVG_NS, tag) as SVGElementTagNameMap[K];
 }
-
-// Legend item width and row height, both relative to cellSize, chosen to fit
-// a color swatch + one glyph + a short label without crowding.
-const LEGEND_ITEM_WIDTH_FACTOR = 7;
-const LEGEND_ROW_HEIGHT_FACTOR = 1.6;
 
 // The thumbnail lives entirely inside the fixed-mm HEADER_BLOCK_MM reserved
 // above the grid (see exportLayout.ts), so — unlike the legend/header text —
@@ -125,21 +124,13 @@ function buildThumbnail(pattern: Pattern, range: PageRange, x: number, y: number
   return group;
 }
 
-function legendItemsPerRow(cellSize: number, availableWidth: number): number {
-  return Math.max(1, Math.floor(availableWidth / (cellSize * LEGEND_ITEM_WIDTH_FACTOR)));
-}
-
-function legendHeight(pattern: Pattern, cellSize: number, availableWidth: number): number {
-  if (pattern.palette.length === 0) return 0;
-  const itemsPerRow = legendItemsPerRow(cellSize, availableWidth);
-  const rows = Math.ceil(pattern.palette.length / itemsPerRow);
-  return rows * cellSize * LEGEND_ROW_HEIGHT_FACTOR;
-}
-
 // The full color/symbol/label legend, flowing left-to-right and wrapping to
 // further rows as needed, at a fixed cellSize-derived item size — it never
-// shrinks the grid's own cellSize to fit.
-function buildLegend(pattern: Pattern, cellSize: number, width: number, y: number): SVGGElement {
+// shrinks the grid's own cellSize to fit. Exported so the single-page
+// overview (overviewRenderer.ts, ticket 41) can reuse the same legend
+// rendering at its own fixed legend cell size, independent of the grid's
+// shrink-to-fit cellSize.
+export function buildLegend(pattern: Pattern, cellSize: number, width: number, y: number): SVGGElement {
   const group = el('g');
   group.setAttribute('data-role', 'legend');
 

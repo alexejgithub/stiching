@@ -112,6 +112,8 @@ button:hover:not(:disabled) {
   box-shadow: var(--shadow-dialog);
   padding: 1.25rem 1.5rem 1.5rem;
   width: min(420px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -310,6 +312,7 @@ button:hover:not(:disabled) {
   [data-role='row-number'],
   [data-role='page-header-title'],
   [data-role='page-header-range'],
+  [data-role='overview-title'],
   [data-role='legend-symbol'],
   [data-role='legend-label'] {
     fill: var(--text);
@@ -449,11 +452,37 @@ button:hover:not(:disabled) {
   display: block;
 }
 
+.export-overview-hint {
+  color: var(--text);
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.export-overview-preview {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  margin: 0.5rem 0;
+}
+
+.export-overview-sheet svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
 /* Print the same generated page SVGs the Download button writes to disk —
    no separate print-only rendering path. Hides everything else in the
    document and lets every page's sheet through (not just the first, which
    is all the on-screen preview shows without scrolling), with a page break
-   between sheets. */
+   between sheets.
+
+   Ticket 41: the dialog also carries a second, independent artifact (the
+   single-page overview). Only one of the two should reach the physical
+   printer per `window.print()` call, so which container is visible depends
+   on whether ExportDialog has toggled `.printing-overview` onto the dialog
+   root (see its handlePrintOverview/handlePrintPages) — default (no class)
+   prints the paginated set, same as before this ticket. */
 @media print {
   body * {
     visibility: hidden;
@@ -473,5 +502,23 @@ button:hover:not(:disabled) {
   }
   .export-page-sheet {
     page-break-after: always;
+  }
+
+  .export-dialog.printing-overview .export-preview,
+  .export-dialog.printing-overview .export-preview * {
+    visibility: hidden;
+  }
+  .export-dialog.printing-overview .export-overview-preview,
+  .export-dialog.printing-overview .export-overview-preview * {
+    visibility: visible;
+  }
+  .export-dialog.printing-overview .export-overview-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-height: none;
+    overflow: visible;
+    border: none;
+    margin: 0;
   }
 }
